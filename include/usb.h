@@ -41,7 +41,6 @@
 
 #define USB_CNTL_TIMEOUT 100 /* 100ms timeout */
 
-
 /* String descriptor */
 struct usb_string_descriptor {
 	unsigned char  bLength;
@@ -132,7 +131,8 @@ struct usb_config_descriptor {
 
 struct usb_device {
 	int devnum;			/* Device number on USB bus */
-	int slow;			/* Slow device? */
+//	int slow;			/* Slow device? */
+	int speed;			/* Speed. (for EHCI) */
 	char mf[32];			/* manufacturer */
 	char prod[32];			/* product */
 	char serial[32];		/* serial number */
@@ -161,6 +161,7 @@ struct usb_device {
 	unsigned long status;
 	int act_len;			/* transfered bytes */
 	int maxchild;			/* Number of ports if hub */
+	int portnr;				/* for EHCI */
 	struct usb_device *parent;
 	struct usb_device *children[USB_MAXCHILDREN];
 };
@@ -191,6 +192,7 @@ int submit_int_msg(struct usb_device *dev, unsigned long pipe, void *buffer,
 #define USB_MAX_STOR_DEV 5
 block_dev_desc_t *usb_stor_get_dev(int index);
 int usb_stor_scan(int mode);
+void usb_stor_info(void);
 
 #endif
 
@@ -282,8 +284,8 @@ int usb_set_interface(struct usb_device *dev, int interface, int alternate);
  */
 /* Create various pipes... */
 #define create_pipe(dev,endpoint) \
-		(((dev)->devnum << 8) | (endpoint << 15) | ((dev)->slow << 26) | (dev)->maxpacketsize)
-#define default_pipe(dev) ((dev)->slow <<26)
+		(((dev)->devnum << 8) | (endpoint << 15) | ((dev)->speed << 26) | (dev)->maxpacketsize)
+#define default_pipe(dev) ((dev)->speed <<26)
 
 #define usb_sndctrlpipe(dev,endpoint)	((PIPE_CONTROL << 30) | create_pipe(dev,endpoint))
 #define usb_rcvctrlpipe(dev,endpoint)	((PIPE_CONTROL << 30) | create_pipe(dev,endpoint) | USB_DIR_IN)
@@ -315,7 +317,8 @@ int usb_set_interface(struct usb_device *dev, int interface, int alternate);
 #define usb_pipe_endpdev(pipe)	(((pipe) >> 8) & 0x7ff)
 #define usb_pipeendpoint(pipe)	(((pipe) >> 15) & 0xf)
 #define usb_pipedata(pipe)	(((pipe) >> 19) & 1)
-#define usb_pipeslow(pipe)	(((pipe) >> 26) & 1)
+#define usb_pipespeed(pipe) (((pipe) >> 26) & 3)
+#define usb_pipeslow(pipe)  (usb_pipespeed(pipe) == USB_SPEED_LOW)
 #define usb_pipetype(pipe)	(((pipe) >> 30) & 3)
 #define usb_pipeisoc(pipe)	(usb_pipetype((pipe)) == PIPE_ISOCHRONOUS)
 #define usb_pipeint(pipe)	(usb_pipetype((pipe)) == PIPE_INTERRUPT)

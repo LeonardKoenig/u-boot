@@ -2010,8 +2010,8 @@ void config_usb_ehciohci(void)
 	RALINK_REG(RT2880_RSTCTRL_REG) = val;
 
 	val = RALINK_REG(RT2880_CLKCFG1_REG);
-#if defined(RT5350_ASIC_BOARD)
-	val = val & ~(RALINK_UPHY0_CLK_EN) ;  // disable USB port0 PHY. 
+#if defined(RT5350_ASIC_BOARD) || defined(RT6855_ASIC_BOARD)
+	val = val & ~(RALINK_UPHY0_CLK_EN) ;  // disable USB port0 & port1 PHY. 
 #else
 	val = val & ~(RALINK_UPHY0_CLK_EN | RALINK_UPHY1_CLK_EN) ;  // disable USB port0 & port1 PHY. 
 #endif

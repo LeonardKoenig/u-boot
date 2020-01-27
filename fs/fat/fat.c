@@ -33,6 +33,12 @@
 
 #if (CONFIG_COMMANDS & CFG_CMD_FAT)
 
+/* from u-boot-1.3.4 fat bug fix */
+#define CHECK_CLUST(x, fatsize) ((x) <= 1 || \
+                (x) >= ((fatsize) != 32 ? 0xfff0 : 0xffffff0))
+
+#define DD printf("### %s %d\n", __FUNCTION__, __LINE__);
+
 /*
  * Convert a string to lowercase.
  */
@@ -45,9 +51,9 @@ downcase(char *str)
 	}
 }
 
-static  block_dev_desc_t *cur_dev = NULL;
-static unsigned long part_offset = 0;
-static int cur_part = 1;
+block_dev_desc_t *cur_dev = NULL;
+unsigned long part_offset = 0;
+int cur_part = 1;
 
 #define DOS_PART_TBL_OFFSET	0x1be
 #define DOS_PART_MAGIC_OFFSET	0x1fe
@@ -69,38 +75,50 @@ int
 fat_register_device(block_dev_desc_t *dev_desc, int part_no)
 {
 	unsigned char buffer[SECTOR_SIZE];
+	disk_partition_t info;
 
 	if (!dev_desc->block_read)
 		return -1;
+
 	cur_dev=dev_desc;
 	/* check if we have a MBR (on floppies we have only a PBR) */
 	if (dev_desc->block_read (dev_desc->dev, 0, 1, (ulong *) buffer) != 1) {
 		printf ("** Can't read from device %d **\n", dev_desc->dev);
 		return -1;
 	}
+
 	if (buffer[DOS_PART_MAGIC_OFFSET] != 0x55 ||
 		buffer[DOS_PART_MAGIC_OFFSET + 1] != 0xaa) {
 		/* no signature found */
 		return -1;
 	}
-	if(!strncmp(&buffer[DOS_FS_TYPE_OFFSET],"FAT",3)) {
+
+#if (CONFIG_COMMANDS & CFG_CMD_IDE) || \
+    (CONFIG_COMMANDS & CFG_CMD_SCSI)|| \
+    (CONFIG_COMMANDS & CFG_CMD_USB) || \
+    defined(CONFIG_SYSTEMACE)
+
+	if(!get_partition_info(dev_desc, part_no, &info)) {
+		part_offset = info.start;
+		cur_part = part_no;
+
+	} else if (!strncmp((char *)&buffer[DOS_FS_TYPE_OFFSET], "FAT", 3)) {
 		/* ok, we assume we are on a PBR only */
 		cur_part = 1;
-		part_offset=0;
+		part_offset = 0;
+	}else {
+		printf ("** Partition %d not valid on device %d **\n",
+                                      part_no,dev_desc->dev);
+		return -1;
 	}
-	else {
-#if (CONFIG_COMMANDS & CFG_CMD_IDE) || (CONFIG_COMMANDS & CFG_CMD_SCSI) || \
-    (CONFIG_COMMANDS & CFG_CMD_USB) || defined(CONFIG_SYSTEMACE)
-		disk_partition_t info;
-		if(!get_partition_info(dev_desc, part_no, &info)) {
-			part_offset = info.start;
-			cur_part = part_no;
-		}
-		else {
-			printf ("** Partition %d not valid on device %d **\n",part_no,dev_desc->dev);
-			return -1;
-		}
+
 #else
+	if (!strncmp((char *)&buffer[DOS_FS_TYPE_OFFSET],"FAT",3)) {
+		/* ok, we assume we are on a PBR only */
+		cur_part = 1;
+		part_offset = 0;
+		info.start = part_offset;
+	} else {
 		/* FIXME we need to determine the start block of the
 		 * partition where the DOS FS resides. This can be done
 		 * by using the get_partition_info routine. For this
@@ -108,8 +126,8 @@ fat_register_device(block_dev_desc_t *dev_desc, int part_no)
 		 */
 		part_offset=32;
 		cur_part = 1;
+        }
 #endif
-	}
 	return 0;
 }
 
@@ -176,7 +194,7 @@ static void get_name (dir_entry *dirent, char *s_name)
 	if (*s_name == DELETED_FLAG)
 		*s_name = '\0';
 	else if (*s_name == aRING)
-		*s_name = 'å';
+		*s_name = 0xE5;
 	downcase (s_name);
 }
 
@@ -184,7 +202,7 @@ static void get_name (dir_entry *dirent, char *s_name)
  * Get the entry at index 'entry' in a FAT (12/16/32) table.
  * On failure 0x00 is returned.
  */
-static __u32
+__u32
 get_fatent(fsdata *mydata, __u32 entry)
 {
 	__u32 bufnum;
@@ -209,7 +227,6 @@ get_fatent(fsdata *mydata, __u32 entry)
 		/* Unsupported FAT size */
 		return ret;
 	}
-
 	/* Read a new block of FAT entries into the cache. */
 	if (bufnum != mydata->fatbufnum) {
 		int getsize = FATBUFSIZE/FS_BLOCK_SIZE;
@@ -221,10 +238,12 @@ get_fatent(fsdata *mydata, __u32 entry)
 		startblock += mydata->fat_sect;	/* Offset from start of disk */
 
 		if (getsize > fatlength) getsize = fatlength;
+
 		if (disk_read(startblock, getsize, bufptr) < 0) {
 			FAT_DPRINT("Error reading FAT blocks\n");
 			return ret;
 		}
+
 		mydata->fatbufnum = bufnum;
 	}
 
@@ -239,7 +258,6 @@ get_fatent(fsdata *mydata, __u32 entry)
 	case 12: {
 		__u32 off16 = (offset*3)/4;
 		__u16 val1, val2;
-
 		switch (offset & 0x3) {
 		case 0:
 			ret = FAT2CPU16(((__u16*)mydata->fatbuf)[off16]);
@@ -270,7 +288,6 @@ get_fatent(fsdata *mydata, __u32 entry)
 	break;
 	}
 	FAT_DPRINT("ret: %d, offset: %d\n", ret, offset);
-
 	return ret;
 }
 
@@ -292,17 +309,21 @@ get_cluster(fsdata *mydata, __u32 clustnum, __u8 *buffer, unsigned long size)
 	}
 
 	FAT_DPRINT("gc - clustnum: %d, startsect: %d\n", clustnum, startsect);
+
 	if (disk_read(startsect, size/FS_BLOCK_SIZE , buffer) < 0) {
 		FAT_DPRINT("Error reading data\n");
 		return -1;
 	}
+
 	if(size % FS_BLOCK_SIZE) {
 		__u8 tmpbuf[FS_BLOCK_SIZE];
 		idx= size/FS_BLOCK_SIZE;
+
 		if (disk_read(startsect + idx, 1, tmpbuf) < 0) {
 			FAT_DPRINT("Error reading data\n");
 			return -1;
 		}
+
 		buffer += idx*FS_BLOCK_SIZE;
 
 		memcpy(buffer, tmpbuf, size % FS_BLOCK_SIZE);
@@ -339,17 +360,25 @@ get_contents(fsdata *mydata, dir_entry *dentptr, __u8 *buffer,
 	do {
 		/* search for consecutive clusters */
 		while(actsize < filesize) {
+
 			newclust = get_fatent(mydata, endclust);
-			if((newclust -1)!=endclust)
+
+			if((newclust -1)!=endclust){
+
 				goto getit;
-			if (newclust <= 0x0001 || newclust >= 0xfff0) {
+			}
+			if (CHECK_CLUST(newclust, mydata->fatsize)) {
+
 				FAT_DPRINT("curclust: 0x%x\n", newclust);
 				FAT_DPRINT("Invalid FAT entry\n");
 				return gotsize;
 			}
+
 			endclust=newclust;
+
 			actsize+= bytesperclust;
 		}
+
 		/* actsize >= file size */
 		actsize -= bytesperclust;
 		/* get remaining clusters */
@@ -376,8 +405,10 @@ getit:
 		gotsize += (int)actsize;
 		filesize -= actsize;
 		buffer += actsize;
+
 		curclust = get_fatent(mydata, endclust);
-		if (curclust <= 0x0001 || curclust >= 0xfff0) {
+
+		if (CHECK_CLUST(curclust, mydata->fatsize)) {
 			FAT_DPRINT("curclust: 0x%x\n", curclust);
 			FAT_ERROR("Invalid FAT entry\n");
 			return gotsize;
@@ -449,7 +480,7 @@ get_vfatname(fsdata *mydata, int curclust, __u8 *cluster,
 
 		slotptr--;
 		curclust = get_fatent(mydata, curclust);
-		if (curclust <= 0x0001 || curclust >= 0xfff0) {
+		if (CHECK_CLUST(curclust, mydata->fatsize)) {
 			FAT_DPRINT("curclust: 0x%x\n", curclust);
 			FAT_ERROR("Invalid FAT entry\n");
 			return -1;
@@ -481,7 +512,7 @@ get_vfatname(fsdata *mydata, int curclust, __u8 *cluster,
 
 	l_name[idx] = '\0';
 	if (*l_name == DELETED_FLAG) *l_name = '\0';
-	else if (*l_name == aRING) *l_name = 'å';
+	else if (*l_name == aRING) *l_name = 0xE5;
 	downcase(l_name);
 
 	/* Return the real directory entry */
@@ -641,8 +672,10 @@ static dir_entry *get_dentfromdir (fsdata * mydata, int startsect,
 
 	    return retdent;
 	}
+
 	curclust = get_fatent (mydata, curclust);
-	if (curclust <= 0x0001 || curclust >= 0xfff0) {
+
+	if (CHECK_CLUST(curclust, mydata->fatsize)) {
 	    FAT_DPRINT ("curclust: 0x%x\n", curclust);
 	    FAT_ERROR ("Invalid FAT entry\n");
 	    return NULL;
@@ -722,7 +755,10 @@ long
 do_fat_read (const char *filename, void *buffer, unsigned long maxsize,
 	     int dols)
 {
-    char fnamecopy[2048];
+//#if CONFIG_NIOS /* NIOS CPU cannot access big automatic arrays */
+    static
+//#endif
+    char fnamecopy[256];
     boot_sector bs;
     volume_info volinfo;
     fsdata datablock;
@@ -797,6 +833,7 @@ do_fat_read (const char *filename, void *buffer, unsigned long maxsize,
 	    FAT_DPRINT ("Error: reading rootdir block\n");
 	    return -1;
 	}
+
 	dentptr = (dir_entry *) do_fat_read_block;
 	for (i = 0; i < DIRENTSPERBLOCK; i++) {
 	    char s_name[14], l_name[256];
