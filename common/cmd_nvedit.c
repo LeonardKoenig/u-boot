@@ -46,6 +46,8 @@
 #include <serial.h>
 #include <linux/stddef.h>
 #include <asm/byteorder.h>
+#include <rt_mmap.h>
+
 #if (CONFIG_COMMANDS & CFG_CMD_NET)
 #include <net.h>
 #endif
@@ -55,8 +57,9 @@
     !defined(CFG_ENV_IS_IN_FLASH)	&& \
     !defined(CFG_ENV_IS_IN_DATAFLASH)	&& \
     !defined(CFG_ENV_IS_IN_NAND)	&& \
+    !defined(CFG_ENV_IS_IN_SPI)	&& \
     !defined(CFG_ENV_IS_NOWHERE)
-# error Define one of CFG_ENV_IS_IN_{NVRAM|EEPROM|FLASH|DATAFLASH|NOWHERE}
+# error Define one of CFG_ENV_IS_IN_{NVRAM|EEPROM|FLASH|DATAFLASH|SPI|NOWHERE}
 #endif
 
 #define XMK_STR(x)	#x
@@ -380,6 +383,43 @@ int _do_setenv (int flag, int argc, char *argv[])
 	}
 #endif	/* CONFIG_AMIGAONEG3SE */
 
+#if 0
+	if (strcmp(argv[1],"twe0") == 0) {
+		printf("\n Reset  to Flash environment  \n");
+	{
+
+		unsigned int regvalue,kk0;
+
+
+		kk0 = simple_strtoul(argv[2], NULL, 16);
+		
+		regvalue = *(volatile u_long *)(RALINK_SYSCTL_BASE + 0x0308);
+
+	printf("\n Default FLASH_CS1_CFG = %08X \n",regvalue);
+
+    regvalue &= ~(0x3 << 26);
+	regvalue |= (0x1 << 26);
+
+	regvalue |= (0x1 << 24);
+
+	regvalue &= ~(0x3 << 20);
+	regvalue |= (0x1 << 20);
+
+	regvalue &= ~(0x3 << 16);
+	regvalue |= (0x1 << 16);
+
+	regvalue &= ~(0xF << 12);
+	regvalue |= (kk0 << 12);
+
+
+	*(volatile u_long *)(RALINK_SYSCTL_BASE + 0x0308) = regvalue;
+
+	regvalue = *(volatile u_long *)(RALINK_SYSCTL_BASE + 0x0308);
+
+		}
+	}
+#endif
+
 	return 0;
 }
 
@@ -461,7 +501,7 @@ int do_askenv ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		return 1;
 
 	/* prompt for input */
-	len = readline (message);
+	len = readline (message, 0);
 
 	if (size < len)
 		console_buffer[size] = '\0';
@@ -505,6 +545,7 @@ char *getenv (uchar *name)
 	return (NULL);
 }
 
+#if 0
 int getenv_r (uchar *name, uchar *buf, unsigned len)
 {
 	int i, nxt;
@@ -529,6 +570,7 @@ int getenv_r (uchar *name, uchar *buf, unsigned len)
 	}
 	return (-1);
 }
+#endif
 
 #if defined(CFG_ENV_IS_IN_NVRAM) || defined(CFG_ENV_IS_IN_EEPROM) || \
     ((CONFIG_COMMANDS & (CFG_CMD_ENV|CFG_CMD_FLASH)) == \

@@ -64,11 +64,11 @@
 #ifdef CFG_RX_ETH_BUFFER
 # define PKTBUFSRX	CFG_RX_ETH_BUFFER
 #else
-# define PKTBUFSRX	4
+# define PKTBUFSRX	8
 #endif
 
-#define PKTALIGN	32
-
+#define PKTALIGN	64
+#define FLANK_TEST_SPX_ALIGNMENT 16
 typedef ulong		IPaddr_t;
 
 

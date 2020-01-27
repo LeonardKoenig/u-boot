@@ -153,6 +153,35 @@ typedef void (interrupt_handler_t)(void *);
 	({ typeof (X) __x = (X), __y = (Y);	\
 		(__x > __y) ? __x : __y; })
 
+/*
+*  kaiker define
+*/
+
+#define NUM_RX_DESC 20
+#define NUM_TX_DESC 20
+
+
+//   For loopback test
+
+typedef struct _BUFFER_ELEM_    BUFFER_ELEM;
+
+struct _BUFFER_ELEM_
+{
+	int tx_idx;
+    unsigned char *pbuf;
+    BUFFER_ELEM       *next;
+    
+    
+};
+
+typedef struct _VALID_BUFFER_STRUCT_    VALID_BUFFER_STRUCT;
+
+struct _VALID_BUFFER_STRUCT_
+{
+    BUFFER_ELEM    *head;
+    BUFFER_ELEM    *tail;	
+};
+
 
 /*
  * Function Prototypes
@@ -176,7 +205,7 @@ void	print_size (ulong, const char *);
 /* common/main.c */
 void	main_loop	(void);
 int	run_command	(const char *cmd, int flag);
-int	readline	(const char *const prompt);
+int	readline	(const char *const prompt, int show_buf);
 void	init_cmd_timeout(void);
 void	reset_cmd_timeout(void);
 
@@ -249,7 +278,7 @@ int	misc_init_r   (void);
 void	jumptable_init(void);
 
 /* common/memsize.c */
-int	get_ram_size  (volatile long *, long);
+//int	get_ram_size  (volatile long *, long);
 
 /* $(BOARD)/$(BOARD).c */
 void	reset_phy     (void);
@@ -351,6 +380,8 @@ int	dcache_status (void);
 void	dcache_enable (void);
 void	dcache_disable(void);
 void	relocate_code (ulong, gd_t *, ulong);
+void 	mips_cache_reset(void);
+
 ulong	get_endaddr   (void);
 void	trap_init     (ulong);
 #if defined (CONFIG_4xx)	|| \
@@ -530,6 +561,7 @@ int	console_init_f(void);	/* Before relocation; uses the serial  stuff	*/
 int	console_init_r(void);	/* After  relocation; uses the console stuff	*/
 int	console_assign (int file, char *devname);	/* Assign the console	*/
 int	ctrlc (void);
+int kaiker_button_p (void); // add by kaiker
 int	had_ctrlc (void);	/* have we had a Control-C since last clear? */
 void	clear_ctrlc (void);	/* clear the Control-C condition */
 int	disable_ctrlc (int);	/* 1 to disable, 0 to enable Control-C detect */

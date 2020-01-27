@@ -10,7 +10,7 @@
 #define	__BYTE_ORDER	__LITTLE_ENDIAN
 
 #include <linux/byteorder/swab.h>
-
+												
 #define __constant_htonl(x) ___constant_swab32((x))
 #define __constant_ntohl(x) ___constant_swab32((x))
 #define __constant_htons(x) ___constant_swab16((x))

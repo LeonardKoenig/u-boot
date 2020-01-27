@@ -125,7 +125,7 @@ flash_fill_sect_ranges (ulong addr_first, ulong addr_last,
 
 		b_end = info->start[0] + info->size - 1;	/* bank end addr */
 		s_end = info->sector_count - 1;			/* last sector   */
-
+		printf("\n b_end =%08X\n",b_end);
 
 		for (sect=0; sect < info->sector_count; ++sect) {
 			ulong end;	/* last address in current sect	*/
@@ -166,6 +166,8 @@ flash_fill_sect_ranges (ulong addr_first, ulong addr_last,
 			(*s_count) += s_last[bank] - s_first[bank] + 1;
 		} else if (addr_first >= info->start[0] && addr_first < b_end) {
 			puts ("Error: start address not on sector boundary\n");
+			printf("\n addr_first[0x%08X] >= info->start[0][0x%08X] && addr_first[0x%08X] < b_end[0x%08X]\n",
+				addr_first,info->start[0],addr_first,b_end);
 			rcode = 1;
 			break;
 		} else if (s_last[bank] >= 0) {
@@ -178,6 +180,7 @@ flash_fill_sect_ranges (ulong addr_first, ulong addr_last,
 
 	return rcode;
 }
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 int do_flinfo ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
@@ -206,6 +209,7 @@ int do_flinfo ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	flash_print_info (&flash_info[bank-1]);
 	return 0;
 }
+#endif
 int do_flerase (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	flash_info_t *info;
@@ -218,11 +222,29 @@ int do_flerase (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		return 1;
 	}
 
-	if (strcmp(argv[1], "all") == 0) {
+	if (strcmp(argv[1], "linux") == 0) 
+	{
+		printf("\n Erase linux kernel block !!\n");
+		printf("From 0x%X To 0x%X\n", CFG_KERN_ADDR, CFG_KERN_ADDR + flash_info[0].size
+				- (CFG_BOOTLOADER_SIZE + CFG_CONFIG_SIZE + CFG_FACTORY_SIZE) -1);
+		rcode = flash_sect_erase(CFG_KERN_ADDR, CFG_KERN_ADDR + flash_info[0].size
+				-(CFG_BOOTLOADER_SIZE + CFG_CONFIG_SIZE + CFG_FACTORY_SIZE) -1);
+	
+		return rcode;
+	}
+	else if (strcmp(argv[1], "uboot") == 0) 
+	{
+		printf("\n Erase u-boot block !!\n");
+		printf("From 0x%X To 0x%X\n", CFG_FLASH_BASE, CFG_FLASH_BASE + CFG_BOOTLOADER_SIZE - 1);
+		rcode = flash_sect_erase(CFG_FLASH_BASE, CFG_FLASH_BASE + CFG_BOOTLOADER_SIZE - 1);
+	
+		return rcode;
+	}
+	else if (strcmp(argv[1], "all") == 0) {
 		for (bank=1; bank<=CFG_MAX_FLASH_BANKS; ++bank) {
-			printf ("Erase Flash Bank # %ld ", bank);
+			printf ("Erase Flash Bank # %ld ,info->sector_count = %d", bank,info->sector_count-1);
 			info = &flash_info[bank-1];
-			rcode = flash_erase (info, 0, info->sector_count-1);
+			rcode = erase_all_chip (info, 0, info->sector_count-1);
 		}
 		return rcode;
 	}
@@ -268,6 +290,28 @@ int do_flerase (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	return rcode;
 }
 
+int get_addr_boundary (ulong *addr)
+{
+	int i;
+	flash_info_t *info = &flash_info[0];
+
+	if ((*addr) > info->start[0] + info->size - 1) {
+		printf("Error: out of flash address range\n");
+		return -1;
+	}
+	for (i = 0; i < info->sector_count; i++) {
+		if (i == info->sector_count -1) {
+			*addr = info->start[0] + info->size - 1;
+			return 0;
+		}
+		if (info->start[i] < (*addr) && (*addr) <= info->start[i+1]) {
+			*addr = info->start[i+1] - 1;
+			return 0;
+		}
+	}
+	return -1;
+}
+
 int flash_sect_erase (ulong addr_first, ulong addr_last)
 {
 	flash_info_t *info;
@@ -289,7 +333,7 @@ int flash_sect_erase (ulong addr_first, ulong addr_last)
 				debug ("Erase Flash from 0x%08lx to 0x%08lx "
 					"in Bank # %ld ",
 					info->start[s_first[bank]],
-					(s_last[bank] == info->sector_count) ?
+					(s_last[bank]+1 == info->sector_count) ?
 						info->start[0] + info->size - 1:
 						info->start[s_last[bank]+1] - 1,
 					bank+1);
@@ -498,6 +542,7 @@ int flash_sect_protect (int p, ulong addr_first, ulong addr_last)
 
 
 /**************************************************/
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 U_BOOT_CMD(
 	flinfo,    2,    1,    do_flinfo,
@@ -505,7 +550,7 @@ U_BOOT_CMD(
 	"\n    - print information for all FLASH memory banks\n"
 	"flinfo N\n    - print information for FLASH memory bank # N\n"
 );
-
+#endif
 U_BOOT_CMD(
 	erase,   3,   1,  do_flerase,
 	"erase   - erase FLASH memory\n",
@@ -514,6 +559,7 @@ U_BOOT_CMD(
 	"erase N:SF[-SL]\n    - erase sectors SF-SL in FLASH bank # N\n"
 	"erase bank N\n    - erase FLASH bank # N\n"
 	"erase all\n    - erase all FLASH banks\n"
+	"erase linux\n    - erase linux kernel block\n"
 );
 
 U_BOOT_CMD(

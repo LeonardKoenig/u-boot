@@ -23,6 +23,7 @@
 
 #include <common.h>
 
+extern unsigned long mips_cpu_feq;
 
 static inline void mips_compare_set(u32 v)
 {
@@ -33,6 +34,10 @@ static inline void mips_count_set(u32 v)
 {
 	asm volatile ("mtc0 %0, $9" : : "r" (v));
 }
+
+
+
+
 
 
 static inline u32 mips_count_get(void)
@@ -46,12 +51,13 @@ static inline u32 mips_count_get(void)
 /*
  * timer without interrupts
  */
-
+  
 int timer_init(void)
 {
+	
 	mips_compare_set(0);
 	mips_count_set(0);
-
+	
 	return 0;
 }
 
@@ -62,6 +68,7 @@ void reset_timer(void)
 
 ulong get_timer(ulong base)
 {
+	//printf("%s = %x\n", __FUNCTION__, mips_count_get() );
 	return mips_count_get() - base;
 }
 
@@ -75,7 +82,7 @@ void udelay (unsigned long usec)
 	ulong tmo;
 	ulong start = get_timer(0);
 
-	tmo = usec * (CFG_HZ / 1000000);
+	tmo = usec * ((mips_cpu_feq/2) / 1000000);
 	while ((ulong)((mips_count_get() - start)) < tmo)
 		/*NOP*/;
 }

@@ -36,11 +36,8 @@
 #include <dataflash.h>
 #endif
 
-#if (CONFIG_COMMANDS & (CFG_CMD_MEMORY	| \
-			CFG_CMD_I2C	| \
-			CFG_CMD_ITEST	| \
-			CFG_CMD_PCI	| \
-			CMD_CMD_PORTIO	) )
+extern ulong		NetBootFileXferSize;
+
 int cmd_get_data_size(char* arg, int default_size)
 {
 	/* Check for a size specification .b, .w or .l.
@@ -62,7 +59,8 @@ int cmd_get_data_size(char* arg, int default_size)
 	}
 	return default_size;
 }
-#endif
+
+static	ulong	base_address = 0;
 
 #if (CONFIG_COMMANDS & CFG_CMD_MEMORY)
 
@@ -80,8 +78,6 @@ static int mod_mem(cmd_tbl_t *, int, int, int, char *[]);
 uint	dp_last_addr, dp_last_size;
 uint	dp_last_length = 0x40;
 uint	mm_last_addr, mm_last_size;
-
-static	ulong	base_address = 0;
 
 /* Memory Display
  *
@@ -189,6 +185,9 @@ int do_mem_md ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		}
 		putc ('\n');
 		nbytes -= linebytes;
+
+		
+		
 		if (ctrlc()) {
 			rc = 1;
 			break;
@@ -212,6 +211,7 @@ int do_mem_nm ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 
 int do_mem_mw ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
+#ifdef kaiker
 	ulong	addr, writeval, count;
 	int	size;
 
@@ -250,6 +250,7 @@ int do_mem_mw ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 			*((u_char *)addr) = (u_char)writeval;
 		addr += size;
 	}
+	#endif
 	return 0;
 }
 
@@ -313,12 +314,15 @@ int do_mem_mwc ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 }
 #endif /* CONFIG_MX_CYCLIC */
 
+#ifdef RT2880_U_BOOT_CMD_OPEN
+
 int do_mem_cmp (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
+
 	ulong	addr1, addr2, count, ngood;
 	int	size;
 	int     rcode = 0;
-
+#ifdef kaiker
 	if (argc != 4) {
 		printf ("Usage:\n%s\n", cmdtp->usage);
 		return 1;
@@ -338,6 +342,7 @@ int do_mem_cmp (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	count = simple_strtoul(argv[3], NULL, 16);
 
 #ifdef CONFIG_HAS_DATAFLASH
+
 	if (addr_dataflash(addr1) | addr_dataflash(addr2)){
 		puts ("Comparison with DataFlash space not supported.\n\r");
 		return 0;
@@ -388,143 +393,8 @@ int do_mem_cmp (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	printf("Total of %ld %s%s were the same\n",
 		ngood, size == 4 ? "word" : size == 2 ? "halfword" : "byte",
 		ngood == 1 ? "" : "s");
+#endif
 	return rcode;
-}
-
-int do_mem_cp ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
-{
-	ulong	addr, dest, count;
-	int	size;
-
-	if (argc != 4) {
-		printf ("Usage:\n%s\n", cmdtp->usage);
-		return 1;
-	}
-
-	/* Check for size specification.
-	*/
-	if ((size = cmd_get_data_size(argv[0], 4)) < 0)
-		return 1;
-
-	addr = simple_strtoul(argv[1], NULL, 16);
-	addr += base_address;
-
-	dest = simple_strtoul(argv[2], NULL, 16);
-	dest += base_address;
-
-	count = simple_strtoul(argv[3], NULL, 16);
-
-	if (count == 0) {
-		puts ("Zero length ???\n");
-		return 1;
-	}
-
-#ifndef CFG_NO_FLASH
-	/* check if we are copying to Flash */
-	if ( (addr2info(dest) != NULL)
-#ifdef CONFIG_HAS_DATAFLASH
-	   && (!addr_dataflash(addr))
-#endif
-	   ) {
-		int rc;
-
-		puts ("Copy to Flash... ");
-
-		rc = flash_write ((uchar *)addr, dest, count*size);
-		if (rc != 0) {
-			flash_perror (rc);
-			return (1);
-		}
-		puts ("done\n");
-		return 0;
-	}
-#endif
-
-#if (CONFIG_COMMANDS & CFG_CMD_MMC)
-	if (mmc2info(dest)) {
-		int rc;
-
-		puts ("Copy to MMC... ");
-		switch (rc = mmc_write ((uchar *)addr, dest, count*size)) {
-		case 0:
-			putc ('\n');
-			return 1;
-		case -1:
-			puts ("failed\n");
-			return 1;
-		default:
-			printf ("%s[%d] FIXME: rc=%d\n",__FILE__,__LINE__,rc);
-			return 1;
-		}
-		puts ("done\n");
-		return 0;
-	}
-
-	if (mmc2info(addr)) {
-		int rc;
-
-		puts ("Copy from MMC... ");
-		switch (rc = mmc_read (addr, (uchar *)dest, count*size)) {
-		case 0:
-			putc ('\n');
-			return 1;
-		case -1:
-			puts ("failed\n");
-			return 1;
-		default:
-			printf ("%s[%d] FIXME: rc=%d\n",__FILE__,__LINE__,rc);
-			return 1;
-		}
-		puts ("done\n");
-		return 0;
-	}
-#endif
-
-#ifdef CONFIG_HAS_DATAFLASH
-	/* Check if we are copying from RAM or Flash to DataFlash */
-	if (addr_dataflash(dest) && !addr_dataflash(addr)){
-		int rc;
-
-		puts ("Copy to DataFlash... ");
-
-		rc = write_dataflash (dest, addr, count*size);
-
-		if (rc != 1) {
-			dataflash_perror (rc);
-			return (1);
-		}
-		puts ("done\n");
-		return 0;
-	}
-
-	/* Check if we are copying from DataFlash to RAM */
-	if (addr_dataflash(addr) && !addr_dataflash(dest) && (addr2info(dest)==NULL) ){
-		int rc;
-		rc = read_dataflash(addr, count * size, (char *) dest);
-		if (rc != 1) {
-			dataflash_perror (rc);
-			return (1);
-		}
-		return 0;
-	}
-
-	if (addr_dataflash(addr) && addr_dataflash(dest)){
-		puts ("Unsupported combination of source/destination.\n\r");
-		return 1;
-	}
-#endif
-
-	while (count-- > 0) {
-		if (size == 4)
-			*((ulong  *)dest) = *((ulong  *)addr);
-		else if (size == 2)
-			*((ushort *)dest) = *((ushort *)addr);
-		else
-			*((u_char *)dest) = *((u_char *)addr);
-		addr += size;
-		dest += size;
-	}
-	return 0;
 }
 
 int do_mem_base (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
@@ -539,9 +409,12 @@ int do_mem_base (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	printf("Base Address: 0x%08lx\n", base_address);
 	return 0;
 }
+#endif
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 int do_mem_loop (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
+#if 1
 	ulong	addr, length, i, junk;
 	int	size;
 	volatile uint	*longp;
@@ -608,8 +481,9 @@ int do_mem_loop (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		while (i-- > 0)
 			junk = *cp++;
 	}
+#endif	
 }
-
+#endif
 #ifdef CONFIG_LOOPW
 int do_mem_loopw (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
@@ -690,6 +564,10 @@ int do_mem_loopw (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
  * configured using CFG_ALT_MEMTEST. The complete test loops until
  * interrupted by ctrl-c or by a failure of one of the sub-tests.
  */
+
+#ifdef RT2880_U_BOOT_CMD_OPEN
+
+
 int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	vu_long	*addr, *start, *end;
@@ -992,8 +870,9 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	}
 	return rcode;
 #endif
-}
 
+}
+#endif
 
 /* Modify memory.
  *
@@ -1054,13 +933,17 @@ mod_mem(cmd_tbl_t *cmdtp, int incrflag, int flag, int argc, char *argv[])
 		else
 			printf(" %02x", *((u_char *)addr));
 
-		nbytes = readline (" ? ");
+		nbytes = readline (" ? ", 0);
 		if (nbytes == 0 || (nbytes == 1 && console_buffer[0] == '-')) {
 			/* <CR> pressed as only input, don't modify current
 			 * location and move to next. "-" pressed will go back.
 			 */
 			if (incrflag)
+			{
 				addr += nbytes ? -size : size;
+				nbytes = 0;
+			}	
+			else
 			nbytes = 1;
 #ifdef CONFIG_BOOT_RETRY_TIME
 			reset_cmd_timeout(); /* good enough to not time out */
@@ -1099,9 +982,11 @@ mod_mem(cmd_tbl_t *cmdtp, int incrflag, int flag, int argc, char *argv[])
 }
 
 #ifndef CONFIG_CRC32_VERIFY
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 int do_mem_crc (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
+#if 1
 	ulong addr, length;
 	ulong crc;
 	ulong *ptr;
@@ -1125,11 +1010,12 @@ int do_mem_crc (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		ptr = (ulong *) simple_strtoul (argv[3], NULL, 16);
 		*ptr = crc;
 	}
-
+#endif
 	return 0;
 }
-
+#endif
 #else	/* CONFIG_CRC32_VERIFY */
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 int do_mem_crc (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
@@ -1183,6 +1069,7 @@ int do_mem_crc (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	return 0;
 
 }
+#endif
 #endif	/* CONFIG_CRC32_VERIFY */
 
 /**************************************************/
@@ -1213,27 +1100,25 @@ U_BOOT_CMD(
 	"[.b, .w, .l] address value [count]\n    - write memory\n"
 );
 
-U_BOOT_CMD(
-	cp,    4,    1,    do_mem_cp,
-	"cp      - memory copy\n",
-	"[.b, .w, .l] source target count\n    - copy memory\n"
-);
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 U_BOOT_CMD(
 	cmp,    4,     1,     do_mem_cmp,
 	"cmp     - memory compare\n",
 	"[.b, .w, .l] addr1 addr2 count\n    - compare memory\n"
 );
-
+#endif
 #ifndef CONFIG_CRC32_VERIFY
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 U_BOOT_CMD(
 	crc32,    4,    1,     do_mem_crc,
 	"crc32   - checksum calculation\n",
 	"address count [addr]\n    - compute CRC32 checksum [save at addr]\n"
 );
-
+#endif
 #else	/* CONFIG_CRC32_VERIFY */
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 U_BOOT_CMD(
 	crc32,    5,    1,     do_mem_crc,
@@ -1241,8 +1126,9 @@ U_BOOT_CMD(
 	"address count [addr]\n    - compute CRC32 checksum [save at addr]\n"
 	"-v address count crc\n    - verify crc of memory area\n"
 );
-
+#endif
 #endif	/* CONFIG_CRC32_VERIFY */
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 U_BOOT_CMD(
 	base,    2,    1,     do_mem_base,
@@ -1257,7 +1143,7 @@ U_BOOT_CMD(
 	"[.b, .w, .l] address number_of_objects\n"
 	"    - loop on a set of addresses\n"
 );
-
+#endif
 #ifdef CONFIG_LOOPW
 U_BOOT_CMD(
 	loopw,    4,    1,    do_mem_loopw,
@@ -1266,14 +1152,14 @@ U_BOOT_CMD(
 	"    - loop on a set of addresses\n"
 );
 #endif /* CONFIG_LOOPW */
-
+#ifdef RT2880_U_BOOT_CMD_OPEN
 U_BOOT_CMD(
 	mtest,    4,    1,     do_mem_mtest,
 	"mtest   - simple RAM test\n",
 	"[start [end [pattern]]]\n"
 	"    - simple RAM read/write test\n"
 );
-
+#endif
 #ifdef CONFIG_MX_CYCLIC
 U_BOOT_CMD(
 	mdc,     4,     1,      do_mem_mdc,
@@ -1290,3 +1176,233 @@ U_BOOT_CMD(
 
 #endif
 #endif	/* CFG_CMD_MEMORY */
+
+#ifdef CFG_ENV_IS_IN_FLASH
+int do_mem_cp ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+{
+	ulong	addr = 0, dest = 0, count = 0;
+	int	size;
+
+	if(!memcmp(argv[0],"cp.linux",sizeof("cp.linux")))
+	{
+/* 8M/16 flash:
+ *  -write linux kernel and file system separately
+ *  -kernel starts at PHYS_FLASH_1 and file system starts at PHYS_FLASH_2
+ */
+#if (defined (RT2880_ASIC_BOARD) || defined (RT2880_FPGA_BOARD) || defined (RT3052_MP1)) && (defined ON_BOARD_8M_FLASH_COMPONENT || defined ON_BOARD_16M_FLASH_COMPONENT)
+		int rc;
+		ulong kernsz = 0x3B0000;
+
+		addr += base_address;
+		addr += CFG_LOAD_ADDR;
+		dest = dest + CFG_KERN_ADDR + base_address;
+		if (NetBootFileXferSize <= kernsz)
+			count = NetBootFileXferSize;
+		else
+			count = kernsz;
+		size = 1;
+
+		printf("\n Copy linux image[%d byte] to Flash[0x%08X].... \n",count,dest);
+		puts ("Copy to Flash... ");
+		printf ("\n Copy %d bytes to Flash... ", count);
+
+		rc = flash_write ((uchar *)addr, dest, count);
+		if (rc != 0) {
+			flash_perror (rc);
+			return (1);
+		}
+		if (count < kernsz)
+			return 0;
+
+		addr += kernsz;
+		dest = PHYS_FLASH_2;
+		count = NetBootFileXferSize - kernsz;
+		printf("\n Copy linux file system[%d byte] to Flash[0x%08X].... \n",count,dest);
+		puts ("Copy to Flash... ");
+		printf ("\n Copy %d bytes to Flash... ", count);
+
+		rc = flash_write ((uchar *)addr, dest, count);
+		if (rc != 0) {
+			flash_perror (rc);
+			return (1);
+		}
+
+		puts ("done\n");
+		return 0;
+#endif
+		addr += base_address;
+		addr += CFG_LOAD_ADDR;
+		dest = dest + CFG_KERN_ADDR + base_address;
+		printf("\n Copy linux image[%d byte] to Flash[0x%08X].... \n",NetBootFileXferSize,dest);
+		count = NetBootFileXferSize;
+		size = 1;
+		goto RT2880_START_WRITE_FLASH;
+	}
+/* flash layout remove cramfs, by bruce */
+/*
+	else if(!memcmp(argv[0],"cp.cramfs",sizeof("cp.cramfs")))
+	{
+		addr += base_address;
+		addr += CFG_LOAD_ADDR;
+		dest = dest + 0xBC530000 + base_address;
+		printf("\n Copy File System image[%d byte] to Flash[0x%08X].... \n",NetBootFileXferSize,dest);
+		
+		count = NetBootFileXferSize;
+		size = 1;
+		goto RT2880_START_WRITE_FLASH;
+	}
+*/
+	else if(!memcmp(argv[0],"cp.uboot",sizeof("cp.uboot")))
+	{
+		addr += base_address;
+		addr += CFG_LOAD_ADDR;
+		dest = dest + CFG_FLASH_BASE + base_address;
+		printf("\n Copy uboot[%d byte] to Flash[0x%08X].... \n",NetBootFileXferSize,dest);
+		
+		count = NetBootFileXferSize;
+		size = 1;
+		goto RT2880_START_WRITE_FLASH;
+	}
+	
+	if (argc != 4) {
+		printf ("Usage:\n%s\n", cmdtp->usage);
+		return 1;
+	}
+	
+	/* Check for size specification. */
+	if ((size = cmd_get_data_size(argv[0], 4)) < 0)
+	{
+		puts (" cmd error\n");
+		return 1;
+	}	
+
+	addr = simple_strtoul(argv[1], NULL, 16);
+	addr += base_address;
+
+	dest = simple_strtoul(argv[2], NULL, 16);
+	dest += base_address;
+
+	count = simple_strtoul(argv[3], NULL, 16);
+
+RT2880_START_WRITE_FLASH:
+		
+	if (count == 0) {
+		puts ("Zero length ???\n");
+		return 1;
+	}
+
+#ifndef CFG_NO_FLASH
+	/* check if we are copying to Flash */
+	if ( (addr2info(dest) != NULL)
+#ifdef CONFIG_HAS_DATAFLASH
+	   && (!addr_dataflash(addr))
+#endif
+	   ) {
+		int rc;
+
+		puts ("Copy to Flash... ");
+		printf ("\n Copy %d byte to Flash... ",count*size);
+
+		rc = flash_write ((uchar *)addr, dest, count*size);
+		if (rc != 0) {
+			flash_perror (rc);
+			return (1);
+		}
+		puts ("done\n");
+		return 0;
+	}
+#endif
+
+#if (CONFIG_COMMANDS & CFG_CMD_MMC)
+	if (mmc2info(dest)) {
+		int rc;
+
+		puts ("Copy to MMC... ");
+		switch (rc = mmc_write ((uchar *)addr, dest, count*size)) {
+		case 0:
+			putc ('\n');
+			return 1;
+		case -1:
+			puts ("failed\n");
+			return 1;
+		default:
+			printf ("%s[%d] FIXME: rc=%d\n",__FILE__,__LINE__,rc);
+			return 1;
+		}
+		puts ("done\n");
+		return 0;
+	}
+
+	if (mmc2info(addr)) {
+		int rc;
+
+		puts ("Copy from MMC... ");
+		switch (rc = mmc_read (addr, (uchar *)dest, count*size)) {
+		case 0:
+			putc ('\n');
+			return 1;
+		case -1:
+			puts ("failed\n");
+			return 1;
+		default:
+			printf ("%s[%d] FIXME: rc=%d\n",__FILE__,__LINE__,rc);
+			return 1;
+		}
+		puts ("done\n");
+		return 0;
+	}
+#endif
+
+#ifdef CONFIG_HAS_DATAFLASH
+	/* Check if we are copying from RAM or Flash to DataFlash */
+	if (addr_dataflash(dest) && !addr_dataflash(addr)){
+		int rc;
+
+		puts ("Copy to DataFlash... ");
+
+		rc = write_dataflash (dest, addr, count*size);
+
+		if (rc != 1) {
+			dataflash_perror (rc);
+			return (1);
+		}
+		puts ("done\n");
+		return 0;
+	}
+
+	/* Check if we are copying from DataFlash to RAM */
+	if (addr_dataflash(addr) && !addr_dataflash(dest) && (addr2info(dest)==NULL) ){
+		int rc;
+		rc = read_dataflash(addr, count * size, (char *) dest);
+		if (rc != 1) {
+			dataflash_perror (rc);
+			return (1);
+		}
+		return 0;
+	}
+
+	if (addr_dataflash(addr) && addr_dataflash(dest)){
+		puts ("Unsupported combination of source/destination.\n\r");
+		return 1;
+	}
+#endif
+
+	while (count-- > 0) {
+		if (size == 4)
+			*((ulong  *)dest) = *((ulong  *)addr);
+		else if (size == 2)
+			*((ushort *)dest) = *((ushort *)addr);
+		else
+			*((u_char *)dest) = *((u_char *)addr);
+		addr += size;
+		dest += size;
+	}
+	return 0;
+}
+
+U_BOOT_CMD(
+	cp,    4,    1,    do_mem_cp,
+	"cp      - memory copy\n",
+	"[.b, .w, .l] source target count\n    - copy memory\n"
+);
+#endif

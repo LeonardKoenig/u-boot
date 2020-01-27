@@ -1,27 +1,53 @@
-#
-# (C) Copyright 2000
-# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
-#
-# See file CREDITS for list of people who contributed to this
-# project.
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 2 of
-# the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
-# MA 02111-1307 USA
-#
+#####################################################################
+# Please executes 'make menuconfig' to config your own uboot
+#####################################################################
+-include $(TOPDIR)/.config
 
-#########################################################################
+#################<< Test function option Configuration >>###################
+#----------------------------------------
+#If your GPIO14 connect to hardware reset circuit,
+#you can turn on the definition to reset whole board
+#if cpu_reset, system_reset or wdg_reset occured
+#----------------------------------------
+#BOARD_RESET_MODE = GPIO14_RESET_MODE
+
+#----------------------------------------
+#If using an 32MB flash on RT3052_MP2, you might try to turn this on.
+#----------------------------------------
+#ON_BOARD_32M_FLASH_COMPONENT = y
+
+#----------------------------------------
+# PCI pin config to GPIO mode
+#----------------------------------------
+#PCI_MODE = PCI_FUNC
+#UARTF_MODE = UARTF_FUNC
+
+# Set with ON/OFF
+
+UN_NECESSITY_U_BOOT_CMD_OPEN = OFF
+
+######## RT2880 test function option configuration ##########################
+
+# Set with ON/OFF
+RALINK_RUN_COMMAD_AT_ETH_RCV_FUN = OFF
+RALINK_PCI_HOST_TEST_FUN = OFF
+RALINK_MDIO_ACCESS_FUN = ON
+#RALINK_SWITCH_DEBUG_FUN only for RT3052 Embedded Switch
+RALINK_SWITCH_DEBUG_FUN = OFF
+RALINK_SWITCH_LOOPBACK_DEBUG_FUN = OFF
+RALINK_MEMORY_TEST_FUN = OFF
+RALINK_GDMA_STATUS_DISPLAY_FUN = OFF
+RALINK_GDMA_SCATTER_TEST_FUN = OFF
+RALINK_GDMA_DUP_TX_RING_TEST_FUN = OFF
+RALINK_MUTI_TX_DESCRIPTOR_TEST_FUN = OFF
+RALINK_CACHE_STATE_DETECT_FUNC = OFF
+RALINK_SEGMENT_SIZE_ALIGN_TEST_FUNC = OFF
+RALINK_INTERNAL_LOOPBACK_TEST_FUNC = OFF
+RALINK_SDRAM_CONTROLLER_REFRESH_CYCLE_TEST_FUNC = OFF
+RALINK_RT3052_PHY_TEST = OFF
+RALINK_RW_RF_REG_FUN = OFF
+
+##########################################################################
 
 # clean the slate ...
 PLATFORM_RELFLAGS =
@@ -82,7 +108,7 @@ HOSTCC		= cc
 else
 HOSTCC		= gcc
 endif
-HOSTCFLAGS	= -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer
+HOSTCFLAGS	= -Wall -Wstrict-prototypes -g -fomit-frame-pointer
 HOSTSTRIP	= strip
 
 #########################################################################
@@ -102,7 +128,7 @@ OBJDUMP = $(CROSS_COMPILE)objdump
 RANLIB	= $(CROSS_COMPILE)RANLIB
 
 RELFLAGS= $(PLATFORM_RELFLAGS)
-DBGFLAGS= -g #-DDEBUG
+DBGFLAGS= -gdwarf-2 -DDEBUG
 OPTFLAGS= -Os #-fomit-frame-pointer
 ifndef LDSCRIPT
 #LDSCRIPT := $(TOPDIR)/board/$(BOARDDIR)/u-boot.lds.debug
@@ -112,11 +138,269 @@ OBJCFLAGS += --gap-fill=0xff
 
 gccincdir := $(shell $(CC) -print-file-name=include)
 
+
 CPPFLAGS := $(DBGFLAGS) $(OPTFLAGS) $(RELFLAGS)		\
-	-D__KERNEL__ -DTEXT_BASE=$(TEXT_BASE)		\
+	-D__KERNEL__ -DTEXT_BASE=$(TEXT_BASE) 		\
 	-I$(TOPDIR)/include				\
 	-fno-builtin -ffreestanding -nostdinc -isystem	\
 	$(gccincdir) -pipe $(PLATFORM_CPPFLAGS)
+#	-DROUTER100					\
+
+ifeq ($(UN_NECESSITY_U_BOOT_CMD_OPEN),ON)
+CPPFLAGS += -DRT2880_U_BOOT_CMD_OPEN
+endif
+
+ifeq ($(RALINK_RUN_COMMAD_AT_ETH_RCV_FUN),ON)
+CPPFLAGS += -DRALINK_RUN_COMMAD_AT_ETH_RCV_FUN
+endif
+
+ifeq ($(RALINK_PCI_HOST_TEST_FUN),ON)
+CPPFLAGS += -DRALINK_PCI_HOST_TEST_FUN
+endif
+
+ifeq ($(RALINK_MDIO_ACCESS_FUN),ON)
+CPPFLAGS += -DRALINK_MDIO_ACCESS_FUN
+endif
+
+ifeq ($(RALINK_SWITCH_DEBUG_FUN),ON)
+CPPFLAGS += -DRALINK_SWITCH_DEBUG_FUN
+endif
+
+ifeq ($(RALINK_SWITCH_LOOPBACK_DEBUG_FUN),ON)
+CPPFLAGS += -DRALINK_SWITCH_LOOPBACK_DEBUG_FUN
+endif
+
+ifeq ($(RALINK_MEMORY_TEST_FUN),ON)
+CPPFLAGS += -DRALINK_MEMORY_TEST_FUN
+endif
+
+ifeq ($(RALINK_GDMA_STATUS_DISPLAY_FUN),ON)
+CPPFLAGS += -DRALINK_GDMA_STATUS_DISPLAY_FUN
+endif
+
+ifeq ($(RALINK_GDMA_SCATTER_TEST_FUN),ON)
+CPPFLAGS += -DRALINK_GDMA_SCATTER_TEST_FUN
+endif
+
+ifeq ($(RALINK_GDMA_DUP_TX_RING_TEST_FUN),ON)
+CPPFLAGS += -DRALINK_GDMA_DUP_TX_RING_TEST_FUN
+endif
+
+ifeq ($(RALINK_GDMA_DUP_TX_RING_TEST_FUN),ON)
+CPPFLAGS += -DRALINK_MUTI_TX_DESCRIPTOR_TEST_FUN
+endif
+
+ifeq ($(RALINK_CACHE_STATE_DETECT_FUNC),ON)
+CPPFLAGS += -DRALINK_CACHE_STATE_DETECT_FUNC
+endif
+
+ifeq ($(RALINK_SEGMENT_SIZE_ALIGN_TEST_FUNC),ON)
+CPPFLAGS += -DRALINK_SEGMENT_SIZE_ALIGN_TEST_FUNC
+endif
+
+ifeq ($(RALINK_INTERNAL_LOOPBACK_TEST_FUNC),ON)
+CPPFLAGS += -DRALINK_INTERNAL_LOOPBACK_TEST_FUNC
+endif
+
+ifeq ($(RALINK_SDRAM_CONTROLLER_REFRESH_CYCLE_TEST_FUNC),ON)
+CPPFLAGS += -DRALINK_SDRAM_CONTROLLER_REFRESH_CYCLE_TEST_FUNC
+endif
+
+ifeq ($(RALINK_RT3052_PHY_TEST),ON)
+CPPFLAGS += -DRT3052_PHY_TEST
+endif
+
+ifeq ($(RALINK_RW_RF_REG_FUN),ON)
+CPPFLAGS += -DRALINK_RW_RF_REG_FUN
+endif
+
+ifeq ($(P5_MAC_TO_NONE_MODE),y)
+CPPFLAGS += -DP5_MAC_TO_NONE_MODE
+endif
+
+ifeq ($(P5_MAC_TO_PHY_MODE),y)
+CPPFLAGS += -DP5_MAC_TO_PHY_MODE
+endif
+
+ifeq ($(P5_RGMII_TO_MAC_MODE),y)
+CPPFLAGS += -DP5_RGMII_TO_MAC_MODE
+endif
+
+ifeq ($(P5_MII_TO_MAC_MODE),y)
+CPPFLAGS += -DP5_MII_TO_MAC_MODE
+endif
+
+ifeq ($(P5_RMII_TO_MAC_MODE),y)
+CPPFLAGS += -DP5_RMII_TO_MAC_MODE
+endif
+
+ifeq ($(RT2880_FPGA_BOARD),y)
+CPPFLAGS += -DRT2880_FPGA_BOARD
+endif
+
+ifeq ($(RT2880_ASIC_BOARD),y)
+CPPFLAGS += -DRT2880_ASIC_BOARD
+endif
+
+ifeq ($(RT2883_FPGA_BOARD),y)  
+CPPFLAGS += -DRT2883_FPGA_BOARD
+endif
+
+ifeq ($(RT2883_ASIC_BOARD),y)  
+CPPFLAGS += -DRT2883_ASIC_BOARD
+endif
+
+ifeq ($(RT3052_FPGA_BOARD),y)
+CPPFLAGS += -DRT3052_FPGA_BOARD
+endif
+
+ifeq ($(RT3052_ASIC_BOARD),y)
+CPPFLAGS += -DRT3052_ASIC_BOARD
+endif
+
+ifeq ($(RT3883_FPGA_BOARD),y)  
+CPPFLAGS += -DRT3883_FPGA_BOARD
+endif
+
+ifeq ($(RT3883_ASIC_BOARD),y)  
+CPPFLAGS += -DRT3883_ASIC_BOARD
+endif
+
+ifeq ($(RT2880_MP),y)
+CPPFLAGS += -DRT2880_MP
+endif
+
+ifeq ($(RT2883_MP),y)
+CPPFLAGS += -DRT2883_MP
+endif
+
+ifeq ($(RT3052_MP2),y)
+CPPFLAGS += -DRT3052_MP2
+endif
+
+ifeq ($(RT3883_MP),y)
+CPPFLAGS += -DRT3883_MP
+endif
+
+ifeq ($(MAC_TO_VITESSE_MODE),y)
+CPPFLAGS += -DMAC_TO_VITESSE_MODE
+endif
+
+ifeq ($(MAC_TO_GIGAPHY_MODE),y)
+CPPFLAGS += -DMAC_TO_GIGAPHY_MODE
+endif
+
+ifdef MAC_TO_GIGAPHY_MODE_ADDR
+CPPFLAGS += -DMAC_TO_GIGAPHY_MODE_ADDR=$(MAC_TO_GIGAPHY_MODE_ADDR)
+endif 
+
+ifeq ($(MAC_TO_100PHY_MODE),y)
+CPPFLAGS += -DMAC_TO_100PHY_MODE
+endif
+
+ifeq ($(GPIO10_RESET_MODE),y)
+CPPFLAGS += -DGPIO10_RESET_MODE
+endif
+
+ifeq ($(BOARD_RESET_MODE),GPIO14_RESET_MODE)
+CPPFLAGS += -DGPIO14_RESET_MODE
+endif
+
+ifeq ($(RT3883_USE_GE2),y)
+CPPFLAGS += -DRT3883_USE_GE2
+endif
+
+ifeq ($(PCI_MODE),PCI_FUNC)
+CPPFLAGS += -DPCI_AT_GPIO_FUNC
+endif
+
+ifeq ($(UARTF_MODE),UARTF_FUNC)
+CPPFLAGS += -DUARTF_AT_GPIO_FUNC
+endif
+
+ifeq ($(RALINK_DEMO_BOARD_PVLAN),y)
+CPPFLAGS += -DRALINK_DEMO_BOARD_PVLAN
+endif
+ifeq ($(RALINK_EV_BOARD_PVLAN),y)
+CPPFLAGS += -DRALINK_EV_BOARD_PVLAN
+endif
+
+ifeq ($(DUAL_IMAGE_SUPPORT),y)
+CPPFLAGS += -DDUAL_IMAGE_SUPPORT
+endif
+
+ifeq ($(ON_BOARD_SDR),y)
+CPPFLAGS += -DON_BOARD_SDR
+endif
+ifeq ($(ON_BOARD_DDR),y)
+CPPFLAGS += -DON_BOARD_DDR
+endif
+
+ifeq ($(ON_BOARD_DDR_WIDTH_16),y)
+CPPFLAGS += -DON_BOARD_DDR_WIDTH_16
+endif
+ifeq ($(ON_BOARD_DDR_WIDTH_8),y)
+CPPFLAGS += -DON_BOARD_DDR_WIDTH_8
+endif
+
+ifeq ($(ON_BOARD_16BIT_DRAM_BUS),y)
+CPPFLAGS += -DON_BOARD_16BIT_DRAM_BUS
+else
+ifeq ($(ON_BOARD_32BIT_DRAM_BUS),y)
+CPPFLAGS += -DON_BOARD_32BIT_DRAM_BUS
+endif
+endif
+
+ifeq ($(ON_BOARD_64M_DRAM_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_64M_DRAM_COMPONENT
+else
+ifeq ($(ON_BOARD_128M_DRAM_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_128M_DRAM_COMPONENT
+else
+ifeq ($(ON_BOARD_256M_DRAM_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_256M_DRAM_COMPONENT
+else
+ifeq ($(ON_BOARD_512M_DRAM_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_512M_DRAM_COMPONENT
+else
+ifeq ($(ON_BOARD_1024M_DRAM_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_1024M_DRAM_COMPONENT
+endif
+endif
+endif
+endif
+endif
+
+ifeq ($(ON_BOARD_2M_FLASH_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_2M_FLASH_COMPONENT
+endif
+
+ifeq ($(ON_BOARD_4M_FLASH_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_4M_FLASH_COMPONENT
+endif
+
+ifeq ($(ON_BOARD_8M_FLASH_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_8M_FLASH_COMPONENT
+endif
+
+ifeq ($(ON_BOARD_16M_FLASH_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_16M_FLASH_COMPONENT
+endif
+
+ifeq ($(ON_BOARD_32M_FLASH_COMPONENT),y)
+CPPFLAGS += -DON_BOARD_32M_FLASH_COMPONENT
+endif
+
+ifeq ($(ON_BOARD_NAND_FLASH_COMPONENT),y)
+CFG_ENV_IS := IN_NAND
+else
+ifeq ($(ON_BOARD_SPI_FLASH_COMPONENT),y)
+CFG_ENV_IS := IN_SPI
+else
+CFG_ENV_IS := IN_FLASH
+endif
+endif
+CPPFLAGS += -DCFG_ENV_IS_$(CFG_ENV_IS)
 
 ifdef BUILD_TAG
 CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes \
@@ -167,7 +451,6 @@ export	CONFIG_SHELL HPATH HOSTCC HOSTCFLAGS CROSS_COMPILE \
 	AS LD CC CPP AR NM STRIP OBJCOPY OBJDUMP \
 	MAKE
 export	TEXT_BASE PLATFORM_CPPFLAGS PLATFORM_RELFLAGS CPPFLAGS CFLAGS AFLAGS
-
 #########################################################################
 
 %.s:	%.S

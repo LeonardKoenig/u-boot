@@ -35,6 +35,7 @@
 #include <linux/stddef.h>
 #include <malloc.h>
 
+
 #if ((CONFIG_COMMANDS&(CFG_CMD_ENV|CFG_CMD_FLASH)) == (CFG_CMD_ENV|CFG_CMD_FLASH))
 #define CMD_SAVEENV
 #elif defined(CFG_ENV_ADDR_REDUND)
@@ -100,7 +101,6 @@ int  env_init(void)
 {
 	DECLARE_GLOBAL_DATA_PTR;
 	int crc1_ok = 0, crc2_ok = 0;
-
 	uchar flag1 = flash_addr->flags;
 	uchar flag2 = flash_addr_new->flags;
 
@@ -267,11 +267,15 @@ int  env_init(void)
 	if(flash_probe() == 0)
 		goto bad_flash;
 #endif
-	if (crc32(0, env_ptr->data, ENV_SIZE) == env_ptr->crc) {
+#ifdef CMD_SAVEENV
+	if (crc32(0, env_ptr->data, (0x1000-4)) == env_ptr->crc) { // Roger test
+	//if (crc32(0, env_ptr->data, ENV_SIZE) == env_ptr->crc) {
 		gd->env_addr  = (ulong)&(env_ptr->data);
 		gd->env_valid = 1;
 		return(0);
-	}
+	}	
+#endif
+	
 #ifdef CONFIG_OMAP2420H4
 bad_flash:
 #endif
@@ -294,6 +298,8 @@ int saveenv(void)
 	uchar *env_buffer = (char *)env_ptr;
 #endif	/* CFG_ENV_SECT_SIZE */
 	int rcode = 0;
+
+   printf("File: %s, Func: %s, Line: %d\n", __FILE__,__FUNCTION__ , __LINE__);
 
 #if defined(CFG_ENV_SECT_SIZE) && (CFG_ENV_SECT_SIZE > CFG_ENV_SIZE)
 
@@ -400,7 +406,9 @@ void env_relocate_spec (void)
 		puts ("*** Warning - some problems detected "
 		      "reading environment; recovered successfully\n\n");
 #endif /* CFG_ENV_ADDR_REDUND */
+#if ((CONFIG_COMMANDS&(CFG_CMD_ENV|CFG_CMD_FLASH)) == (CFG_CMD_ENV|CFG_CMD_FLASH))
 	memcpy (env_ptr, (void*)flash_addr, CFG_ENV_SIZE);
+#endif
 #endif /* ! ENV_IS_EMBEDDED || CFG_ENV_ADDR_REDUND */
 }
 

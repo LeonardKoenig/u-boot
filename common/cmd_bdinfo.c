@@ -210,6 +210,7 @@ int do_bdinfo ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 #endif  /* MIPS */
 
 #else	/* ARM */
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 int do_bdinfo ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
@@ -217,7 +218,7 @@ int do_bdinfo ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 
 	int i;
 	bd_t *bd = gd->bd;
-
+#if 1
 	print_num ("arch_number",	bd->bi_arch_number);
 	print_num ("env_t",		(ulong)bd->bi_env);
 	print_num ("boot_params",	(ulong)bd->bi_boot_params);
@@ -237,10 +238,10 @@ int do_bdinfo ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	print_IPaddr (bd->bi_ip_addr);
 	printf ("\n"
 		"baudrate    = %d bps\n", bd->bi_baudrate);
-
+#endif 
 	return 0;
 }
-
+#endif
 #endif /* CONFIG_ARM XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
 
 static void print_num(const char *name, ulong value)
@@ -257,10 +258,12 @@ static void print_str(const char *name, const char *str)
 
 
 /* -------------------------------------------------------------------- */
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 U_BOOT_CMD(
 	bdinfo,	1,	1,	do_bdinfo,
 	"bdinfo  - print Board Info structure\n",
 	NULL
 );
+#endif
 #endif	/* CFG_CMD_BDI */

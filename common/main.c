@@ -53,6 +53,16 @@ static int abortboot(int);
 
 char        console_buffer[CFG_CBSIZE];		/* console I/O buffer	*/
 
+#define CONFIG_CMD_HISTORY
+#ifdef CONFIG_CMD_HISTORY
+#define     HISTORY_SIZE	10
+char 		console_history[HISTORY_SIZE][CFG_CBSIZE];
+static  int	history_cur_idx = -1;
+static  int	history_last_idx = -1;
+static  int history_counter = 0;
+static  int history_enable = 0;
+#endif
+
 static char erase_seq[] = "\b \b";		/* erase sequence	*/
 static char   tab_seq[] = "        ";		/* used to expand TABs	*/
 
@@ -298,6 +308,7 @@ static __inline__ int abortboot(int bootdelay)
 
 /****************************************************************************/
 
+
 void main_loop (void)
 {
 #ifndef CFG_HUSH_PARSER
@@ -320,7 +331,6 @@ void main_loop (void)
 	char *bcs;
 	char bcs_set[16];
 #endif /* CONFIG_BOOTCOUNT_LIMIT */
-
 #if defined(CONFIG_VFD) && defined(VFD_TEST_LOGO)
 	ulong bmp = 0;		/* default bitmap */
 	extern int trab_vfd (ulong bitmap);
@@ -378,6 +388,7 @@ void main_loop (void)
 # ifndef CFG_HUSH_PARSER
 		run_command (p, 0);
 # else
+        printf("\n parse_string_outer \n");
 		parse_string_outer(p, FLAG_PARSE_SEMICOLON |
 				    FLAG_EXIT_FROM_LOOP);
 # endif
@@ -387,12 +398,11 @@ void main_loop (void)
 # endif
 	}
 #endif /* CONFIG_PREBOOT */
-
 #if defined(CONFIG_BOOTDELAY) && (CONFIG_BOOTDELAY >= 0)
 	s = getenv ("bootdelay");
 	bootdelay = s ? (int)simple_strtol(s, NULL, 10) : CONFIG_BOOTDELAY;
 
-	debug ("### main_loop entered: bootdelay=%d\n\n", bootdelay);
+	//debug ("### main_loop entered: bootdelay=%d\n", bootdelay);
 
 # ifdef CONFIG_BOOT_RETRY_TIME
 	init_cmd_timeout ();
@@ -408,8 +418,8 @@ void main_loop (void)
 #endif /* CONFIG_BOOTCOUNT_LIMIT */
 		s = getenv ("bootcmd");
 
-	debug ("### main_loop: bootcmd=\"%s\"\n", s ? s : "<UNDEFINED>");
-
+	//debug ("### main_loop: bootcmd=\"%s\"\n", s ? s : "<UNDEFINED>");
+	bootdelay = -1;
 	if (bootdelay >= 0 && s && !abortboot (bootdelay)) {
 # ifdef CONFIG_AUTOBOOT_KEYED
 		int prev = disable_ctrlc(1);	/* disable Control C checking */
@@ -466,7 +476,7 @@ void main_loop (void)
 			reset_cmd_timeout();
 		}
 #endif
-		len = readline (CFG_PROMPT);
+		len = readline (CFG_PROMPT, 0);
 
 		flag = 0;	/* assume no special flags for now */
 		if (len > 0)
@@ -486,7 +496,6 @@ void main_loop (void)
 # endif
 		}
 #endif
-
 		if (len == -1)
 			puts ("<INTERRUPT>\n");
 		else
@@ -536,7 +545,7 @@ void reset_cmd_timeout(void)
  *		-1 if break
  *		-2 if timed out
  */
-int readline (const char *const prompt)
+int readline (const char *const prompt, int show_buf)
 {
 	char   *p = console_buffer;
 	int	n = 0;				/* buffer index		*/
@@ -549,7 +558,14 @@ int readline (const char *const prompt)
 		plen = strlen (prompt);
 		puts (prompt);
 	}
-	col = plen;
+	if (show_buf) {
+		puts (p);
+		n = strlen(p);
+		col = plen + strlen(p);
+		p += strlen(p);
+	}
+	else
+		col = plen;
 
 	for (;;) {
 #ifdef CONFIG_BOOT_RETRY_TIME
@@ -576,6 +592,13 @@ int readline (const char *const prompt)
 		case '\n':
 			*p = '\0';
 			puts ("\r\n");
+#ifdef CONFIG_CMD_HISTORY
+			if (history_counter < HISTORY_SIZE) history_counter++;
+			history_last_idx++;
+			history_last_idx %= HISTORY_SIZE;
+			history_cur_idx = history_last_idx;
+			strcpy(&console_history[history_last_idx][0], console_buffer);
+#endif
 			return (p - console_buffer);
 
 		case '\0':				/* nul			*/
@@ -606,10 +629,54 @@ int readline (const char *const prompt)
 			p=delete_char(console_buffer, p, &col, &n, plen);
 			continue;
 
+#ifdef CONFIG_CMD_HISTORY
+		case 0x1B:	// ESC : ^[
+			history_enable = 1;
+			break;
+		case 0x5B: // [
+			if (history_enable == 0)
+				goto normal_cond;
+			break;
+		case 0x41:  // up [0x1b 0x41]
+		case 0x42:	// down [0x1b 0x41]
+			if (history_enable == 0)
+				goto normal_cond;
+
+			if (history_last_idx == -1)
+				break;
+
+			if (c == 0x41) {
+				if (history_cur_idx > 0) 
+					history_cur_idx--;
+				else
+					history_cur_idx = history_counter-1;									
+			} else {
+				if (history_cur_idx < history_counter-1) 
+					history_cur_idx++;
+				else
+					history_cur_idx = 0;													
+			}											
+
+			while (col > plen) {
+				puts (erase_seq);
+				--col;
+			}			
+			strcpy(console_buffer, &console_history[history_cur_idx][0]);
+			puts(console_buffer);
+			n = strlen(console_buffer);
+			p = console_buffer+n; 
+			col = n+plen;	
+			history_enable = 0;
+			break;
+normal_cond:
+#endif
 		default:
 			/*
 			 * Must be a normal character then
 			 */
+#ifdef CONFIG_CMD_HISTORY
+			history_enable = 0;
+#endif
 			if (n < CFG_CBSIZE-2) {
 				if (c == '\t') {	/* expand TABs		*/
 #ifdef CONFIG_AUTO_COMPLETE
@@ -624,7 +691,7 @@ int readline (const char *const prompt)
 					col += 8 - (col&07);
 				} else {
 					++col;		/* echo input		*/
-					putc (c);
+					putc (c);					
 				}
 				*p++ = c;
 				++n;
@@ -824,6 +891,148 @@ static void process_macros (const char *input, char *output)
 		strlen(output_start), output_start);
 #endif
 }
+
+
+/****************************************************************************
+ * returns:
+ *	1  - command executed, repeatable
+ *	0  - command executed but not repeatable, interrupted commands are
+ *	     always considered not repeatable
+ *	-1 - not executed (unrecognized, bootd recursion or too many args)
+ *           (If cmd is NULL or "" or longer than CFG_CBSIZE-1 it is
+ *           considered unrecognized)
+ *
+ * WARNING:
+ *
+ * We must create a temporary copy of the command since the command we get
+ * may be the result from getenv(), which returns a pointer directly to
+ * the environment data, which may change magicly when the command we run
+ * creates or modifies environment variables (like "bootp" does).
+ */
+#ifdef RALINK_RUN_COMMAD_AT_ETH_RCV_FUN
+int kaiker_run_command (const char *cmd, int flag)
+{
+	cmd_tbl_t *cmdtp;
+	char cmdbuf[CFG_CBSIZE];	/* working copy of cmd		*/
+	char *token;			/* start of token in cmdbuf	*/
+	char *sep;			/* end of token (separator) in cmdbuf */
+	char finaltoken[CFG_CBSIZE];
+	char *str = cmdbuf;
+	char *argv[CFG_MAXARGS + 1];	/* NULL terminated	*/
+	int argc, inquotes;
+	int repeatable = 1;
+	int rc = 0;
+
+#ifdef DEBUG_PARSER
+	printf ("[RUN_COMMAND] cmd[%p]=\"", cmd);
+	puts (cmd ? cmd : "NULL");	/* use puts - string may be loooong */
+	puts ("\"\n");
+#endif
+
+	clear_ctrlc();		/* forget any previous Control C */
+
+	if (!cmd || !*cmd) {
+		return -1;	/* empty command */
+	}
+
+	if (strlen(cmd) >= CFG_CBSIZE) {
+		puts ("## Command too long!\n");
+		return -1;
+	}
+
+	strcpy (cmdbuf, cmd);
+
+	/* Process separators and check for invalid
+	 * repeatable commands
+	 */
+
+#ifdef DEBUG_PARSER
+	printf ("[PROCESS_SEPARATORS] %s\n", cmd);
+#endif
+	while (*str) {
+
+		/*
+		 * Find separator, or string end
+		 * Allow simple escape of ';' by writing "\;"
+		 */
+		for (inquotes = 0, sep = str; *sep; sep++) {
+			if ((*sep=='\'') &&
+			    (*(sep-1) != '\\'))
+				inquotes=!inquotes;
+
+			if (!inquotes &&
+			    (*sep == ';') &&	/* separator		*/
+			    ( sep != str) &&	/* past string start	*/
+			    (*(sep-1) != '\\'))	/* and NOT escaped	*/
+				break;
+		}
+
+		/*
+		 * Limit the token to data between separators
+		 */
+		token = str;
+		if (*sep) {
+			str = sep + 1;	/* start of command for next pass */
+			*sep = '\0';
+		}
+		else
+			str = sep;	/* no more commands for next pass */
+#ifdef DEBUG_PARSER
+		printf ("token: \"%s\"\n", token);
+#endif
+
+		/* find macros in this token and replace them */
+		process_macros (token, finaltoken);
+
+		/* Extract arguments */
+		argc = parse_line (finaltoken, argv);
+
+		/* Look up command in command table */
+		if ((cmdtp = find_cmd(argv[0])) == NULL) {
+			printf ("Unknown command '%s' - try 'help'\n", argv[0]);
+			rc = -1;	/* give up after bad command */
+			continue;
+		}
+
+		/* found - check max args */
+		if (argc > cmdtp->maxargs) {
+			printf ("Usage:\n%s\n", cmdtp->usage);
+			rc = -1;
+			continue;
+		}
+
+#if (CONFIG_COMMANDS & CFG_CMD_BOOTD)
+		/* avoid "bootd" recursion */
+		if (cmdtp->cmd == do_bootd) {
+#ifdef DEBUG_PARSER
+			printf ("[%s]\n", finaltoken);
+#endif
+			if (flag & CMD_FLAG_BOOTD) {
+				puts ("'bootd' recursion detected\n");
+				rc = -1;
+				continue;
+			}
+			else
+				flag |= CMD_FLAG_BOOTD;
+		}
+#endif	/* CFG_CMD_BOOTD */
+
+		/* OK - call function to do the command */
+		if ((cmdtp->cmd) (cmdtp, flag, argc, argv) != 0) {
+			rc = -1;
+		}
+
+		repeatable &= cmdtp->repeatable;
+
+		/* Did the user stop this? */
+		if (had_ctrlc ())
+			return 0;	/* if stopped then not repeatable */
+	}
+
+	return rc ? rc : repeatable;
+}
+
+#endif
 
 /****************************************************************************
  * returns:

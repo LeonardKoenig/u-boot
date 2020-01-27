@@ -164,7 +164,6 @@ void fprintf (int file, const char *fmt, ...)
 int getc (void)
 {
 	DECLARE_GLOBAL_DATA_PTR;
-
 	if (gd->flags & GD_FLG_DEVINIT) {
 		/* Get from the standard input */
 		return fgetc (stdin);
@@ -177,7 +176,6 @@ int getc (void)
 int tstc (void)
 {
 	DECLARE_GLOBAL_DATA_PTR;
-
 	if (gd->flags & GD_FLG_DEVINIT) {
 		/* Test the standard input */
 		return ftstc (stdin);
@@ -268,6 +266,28 @@ int ctrlc (void)
 			case 0x03:		/* ^C - Control C */
 				ctrlc_was_pressed = 1;
 				return 1;
+			default:
+				break;
+			}
+		}
+	}
+	return 0;
+}
+
+int kaiker_button_p (void)
+{
+	DECLARE_GLOBAL_DATA_PTR;
+
+	if (!ctrlc_disabled && gd->have_console) {
+		if (tstc ()) {
+			switch (getc ()) {
+			case 0x03:		/* ^C - Control C */
+				ctrlc_was_pressed = 1;
+				return 1;
+			case 0x70:
+			return 2;	
+			case 'q':
+			return 3;
 			default:
 				break;
 			}
@@ -373,14 +393,11 @@ int console_assign (int file, char *devname)
 int console_init_f (void)
 {
 	DECLARE_GLOBAL_DATA_PTR;
-
 	gd->have_console = 1;
-
 #ifdef CONFIG_SILENT_CONSOLE
 	if (getenv("silent") != NULL)
 		gd->flags |= GD_FLG_SILENT;
 #endif
-
 	return (0);
 }
 

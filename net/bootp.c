@@ -24,7 +24,7 @@
 #include <net.h>
 #include "bootp.h"
 #include "tftp.h"
-#include "nfs.h"
+//#include "nfs.h"
 #ifdef CONFIG_STATUS_LED
 #include <status_led.h>
 #endif

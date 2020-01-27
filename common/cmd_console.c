@@ -29,6 +29,7 @@
 #include <devices.h>
 
 #if (CONFIG_COMMANDS & CFG_CMD_CONSOLE)
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 extern void _do_coninfo (void);
 int do_coninfo (cmd_tbl_t * cmd, int flag, int argc, char *argv[])
@@ -67,5 +68,5 @@ U_BOOT_CMD(
 	"coninfo - print console devices and information\n",
 	""
 );
-
+#endif
 #endif /* CFG_CMD_CONSOLE */

@@ -28,6 +28,7 @@
 #include <command.h>
 
 #if (CONFIG_COMMANDS & CFG_CMD_MISC)
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 int do_sleep (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
@@ -52,6 +53,7 @@ int do_sleep (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	}
 	return 0;
 }
+#endif
 /* Implemented in $(CPU)/interrupts.c */
 #if (CONFIG_COMMANDS & CFG_CMD_IRQ)
 int do_irqinfo (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[]);
@@ -62,6 +64,7 @@ U_BOOT_CMD(
 	NULL
 );
 #endif  /* CONFIG_COMMANDS & CFG_CMD_IRQ */
+#ifdef RT2880_U_BOOT_CMD_OPEN
 
 U_BOOT_CMD(
 	sleep ,    2,    2,     do_sleep,
@@ -69,5 +72,5 @@ U_BOOT_CMD(
 	"N\n"
 	"    - delay execution for N seconds (N is _decimal_ !!!)\n"
 );
-
+#endif
 #endif	/* CFG_CMD_MISC */

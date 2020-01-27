@@ -21,6 +21,8 @@
 # MA 02111-1307 USA
 #
 
+
+
 HOSTARCH := $(shell uname -m | \
 	sed -e s/i.86/i386/ \
 	    -e s/sun4u/sparc64/ \
@@ -42,6 +44,8 @@ VENDOR=
 TOPDIR	:= $(shell if [ "$$PWD" != "" ]; then echo $$PWD; else pwd; fi)
 export	TOPDIR
 
+CONFIG_CROSS_COMPILER_PATH ?= /opt/buildroot-gcc342/bin
+
 ifeq (include/config.mk,$(wildcard include/config.mk))
 # load ARCH, BOARD, and CPU configuration
 include include/config.mk
@@ -54,32 +58,33 @@ ifeq ($(HOSTARCH),ppc)
 CROSS_COMPILE =
 else
 ifeq ($(ARCH),ppc)
-CROSS_COMPILE = ppc_8xx-
+CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/ppc_8xx-
 endif
 ifeq ($(ARCH),arm)
-CROSS_COMPILE = arm-linux-
+CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/arm-linux-
 endif
 ifeq ($(ARCH),i386)
 ifeq ($(HOSTARCH),i386)
 CROSS_COMPILE =
 else
-CROSS_COMPILE = i386-linux-
+CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/i386-linux-
 endif
 endif
 ifeq ($(ARCH),mips)
-CROSS_COMPILE = mips_4KC-
+# CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/mips_4KCle-
+CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/mipsel-linux-
 endif
 ifeq ($(ARCH),nios)
-CROSS_COMPILE = nios-elf-
+CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/nios-elf-
 endif
 ifeq ($(ARCH),nios2)
-CROSS_COMPILE = nios2-elf-
+CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/nios2-elf-
 endif
 ifeq ($(ARCH),m68k)
-CROSS_COMPILE = m68k-elf-
+CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/m68k-elf-
 endif
 ifeq ($(ARCH),microblaze)
-CROSS_COMPILE = mb-
+CROSS_COMPILE = $(CONFIG_CROSS_COMPILER_PATH)/mb-
 endif
 endif
 endif
@@ -108,67 +113,91 @@ ifdef SOC
 LIBS += cpu/$(CPU)/$(SOC)/lib$(SOC).a
 endif
 LIBS += lib_$(ARCH)/lib$(ARCH).a
-LIBS += fs/cramfs/libcramfs.a fs/fat/libfat.a fs/fdos/libfdos.a fs/jffs2/libjffs2.a \
-	fs/reiserfs/libreiserfs.a fs/ext2/libext2fs.a
 LIBS += net/libnet.a
-LIBS += disk/libdisk.a
+
 LIBS += rtc/librtc.a
-LIBS += dtt/libdtt.a
+#LIBS += dtt/libdtt.a
 LIBS += drivers/libdrivers.a
-LIBS += drivers/sk98lin/libsk98lin.a
-LIBS += post/libpost.a post/cpu/libcpu.a
+
+#LIBS += post/libpost.a post/cpu/libcpu.a
 LIBS += common/libcommon.a
 .PHONY : $(LIBS)
 
 # Add GCC lib
-PLATFORM_LIBS += -L $(shell dirname `$(CC) $(CFLAGS) -print-libgcc-file-name`) -lgcc
+PLATFORM_LIBS += -L $(shell dirname `$(CC) $(CFLAGS)  -print-libgcc-file-name`)
 
+
+KAIKER_LIBS := $(shell dirname $(CC) $(CFLAGS) -lgcc -print-libgcc-file-name)
 
 # The "tools" are needed early, so put this first
 # Don't include stuff already done in $(LIBS)
-SUBDIRS	= tools \
-	  examples \
-	  post \
-	  post/cpu
+ifneq ($(CFG_ENV_IS), IN_FLASH)
+SUBDIRS	= tools
+else
+SUBDIRS	=
+endif
 .PHONY : $(SUBDIRS)
 
 #########################################################################
 #########################################################################
 
-ALL = u-boot.srec u-boot.bin System.map
+ALL = u-boot.srec uboot.bin System.map
+ifneq ($(CFG_ENV_IS), IN_FLASH)
+ALL += uboot.img
+endif
 
 all:		$(ALL)
 
 u-boot.hex:	u-boot
 		$(OBJCOPY) ${OBJCFLAGS} -O ihex $< $@
 
+
 u-boot.srec:	u-boot
 		$(OBJCOPY) ${OBJCFLAGS} -O srec $< $@
 
-u-boot.bin:	u-boot
+uboot.bin:	u-boot
 		$(OBJCOPY) ${OBJCFLAGS} -O binary $< $@
 
-u-boot.img:	u-boot.bin
-		./tools/mkimage -A $(ARCH) -T firmware -C none \
-		-a $(TEXT_BASE) -e 0 \
-		-n $(shell sed -n -e 's/.*U_BOOT_VERSION//p' include/version.h | \
-			sed -e 's/"[	 ]*$$/ for $(BOARD) board"/') \
-		-d $< $@
+uboot.img:	uboot.bin
+ifeq ($(CFG_ENV_IS), IN_SPI)
+		./tools/mkimage -A $(ARCH) -T standalone -C none \
+		-a $(TEXT_BASE) -e $(shell readelf -h u-boot | grep "Entry" | awk '{print $$4}') \
+		-n "$(shell echo $(CFG_ENV_IS) | sed -e 's/IN_//') Flash Image" -d $< $@
+endif
+#ifeq ($(CFG_ENV_IS), IN_NAND)
+#		$(MAKE) -C stage1
+#endif
+ifeq ($(CFG_ENV_IS), IN_NAND)
+		./tools/mkimage -A $(ARCH) -T standalone -C none \
+		-a $(TEXT_BASE) -e $(shell readelf -h u-boot | grep "Entry" | awk '{print $$4}') \
+		-n "$(shell echo $(CFG_ENV_IS) | sed -e 's/IN_//') Flash Image" -d $< $@
+endif
 
 u-boot.dis:	u-boot
 		$(OBJDUMP) -d $< > $@
 
+#u-boot:		depend $(SUBDIRS) $(OBJS) $(LIBS) $(LDSCRIPT)
+#		UNDEF_SYM=`$(OBJDUMP) -x $(LIBS) |sed  -n -e 's/.*\(__u_boot_cmd_.*\)/-u\1/p'|sort|uniq`;\
+#		$(LD) $(LDFLAGS) $$UNDEF_SYM $(OBJS) \
+#			--start-group $(LIBS) --end-group -L $(shell dirname) $(CC) $(CFLAGS) -print-libgcc-file-name -lgcc \
+#			-Map u-boot.map -o u-boot 
+			
 u-boot:		depend $(SUBDIRS) $(OBJS) $(LIBS) $(LDSCRIPT)
 		UNDEF_SYM=`$(OBJDUMP) -x $(LIBS) |sed  -n -e 's/.*\(__u_boot_cmd_.*\)/-u\1/p'|sort|uniq`;\
 		$(LD) $(LDFLAGS) $$UNDEF_SYM $(OBJS) \
 			--start-group $(LIBS) --end-group $(PLATFORM_LIBS) \
 			-Map u-boot.map -o u-boot
+			
+show_path:
+	echo $(OBJDUMP)
 
 $(LIBS):
 		$(MAKE) -C `dirname $@`
+		echo $(MAKE) -C `dirname $@`
 
 $(SUBDIRS):
 		$(MAKE) -C $@ all
+		echo $(MAKE) -C $@ all
 
 gdbtools:
 		$(MAKE) -C tools/gdb || exit 1
@@ -205,7 +234,8 @@ endif
 #########################################################################
 
 unconfig:
-	@rm -f include/config.h include/config.mk board/*/config.tmp
+	@rm -f board/*/config.tmp .config .tmp_config System.map autoconf.h
+
 
 #========================================================================
 # PowerPC
@@ -1458,6 +1488,8 @@ incaip_config: unconfig
 tb0229_config: unconfig
 	@./mkconfig $(@:_config=) mips mips tb0229
 
+rt2880_config: unconfig
+	@./mkconfig $(@:_config=) mips ralink_soc rt2880
 #########################################################################
 ## MIPS32 AU1X00
 #########################################################################
@@ -1588,6 +1620,8 @@ clean:
 		\( -name 'core' -o -name '*.bak' -o -name '*~' \
 		-o -name '*.o'  -o -name '*.a'  \) -print \
 		| xargs rm -f
+	find ./ -name '.depend' -print | xargs rm -f
+
 	rm -f examples/hello_world examples/timer \
 	      examples/eepro100_eeprom examples/sched \
 	      examples/mem_to_mem_idma2intr examples/82559_eeprom
@@ -1598,6 +1632,9 @@ clean:
 	rm -f tools/env/fw_printenv tools/env/fw_setenv
 	rm -f board/cray/L1/bootscript.c board/cray/L1/bootscript.image
 	rm -f board/trab/trab_fkt
+	rm -f stage1/stage2.bin stage1/stage1n2.elf stage1/stage1n2.map
+	rm -f ./uboot.bin ./uboot.img ./u-boot ./u-boot.*
+	rm -f scripts/lxdialog/lxdialog
 
 clobber:	clean
 	find . -type f \( -name .depend \
@@ -1607,9 +1644,6 @@ clobber:	clean
 	rm -f $(OBJS) *.bak tags TAGS
 	rm -fr *.*~
 	rm -f u-boot u-boot.map u-boot.hex $(ALL)
-	rm -f tools/crc32.c tools/environment.c tools/env/crc32.c
-	rm -f tools/inca-swap-bytes cpu/mpc824x/bedbug_603e.c
-	rm -f include/asm/proc include/asm/arch include/asm
 
 mrproper \
 distclean:	clobber unconfig
@@ -1617,5 +1651,9 @@ distclean:	clobber unconfig
 backup:
 	F=`basename $(TOPDIR)` ; cd .. ; \
 	gtar --force-local -zcvf `date "+$$F-%Y-%m-%d-%T.tar.gz"` $$F
+
+menuconfig: config.in
+	$(MAKE) -C scripts/lxdialog all
+	$(CONFIG_SHELL) scripts/Menuconfig config.in
 
 #########################################################################

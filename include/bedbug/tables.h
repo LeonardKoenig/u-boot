@@ -1,4 +1,4 @@
-/* $Id$ */
+/* $Id: tables.h,v 1.1.1.1 2006-05-22 09:48:46 yjlin Exp $ */
 
 #ifndef TABLES_H
 #define TABLES_H

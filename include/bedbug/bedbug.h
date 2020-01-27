@@ -1,4 +1,4 @@
-/* $Id$ */
+/* $Id: bedbug.h,v 1.1.1.1 2006-05-22 09:48:46 yjlin Exp $ */
 
 #ifndef _BEDBUG_H
 #define _BEDBUG_H

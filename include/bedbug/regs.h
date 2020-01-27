@@ -1,4 +1,4 @@
-/* $Id$ */
+/* $Id: regs.h,v 1.1.1.1 2006-05-22 09:48:46 yjlin Exp $ */
 
 #ifndef _REGS_H
 #define _REGS_H

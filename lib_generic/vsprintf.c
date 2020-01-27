@@ -369,6 +369,7 @@ int sprintf(char * buf, const char *fmt, ...)
 	return i;
 }
 
+#if 0
 void panic(const char *fmt, ...)
 {
 	va_list	args;
@@ -383,3 +384,4 @@ void panic(const char *fmt, ...)
 	do_reset (NULL, 0, 0, NULL);
 #endif
 }
+#endif

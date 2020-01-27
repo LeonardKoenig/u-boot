@@ -31,6 +31,9 @@
 #include <malloc.h>
 #include <zlib.h>
 #include <bzlib.h>
+#include <LzmaDecode.h>
+#include <rt_mmap.h>
+
 #include <environment.h>
 #include <asm/byteorder.h>
 
@@ -79,7 +82,9 @@ static void *zalloc(void *, unsigned, unsigned);
 static void zfree(void *, void *, unsigned);
 
 #if (CONFIG_COMMANDS & CFG_CMD_IMI)
+#ifdef RT2880_U_BOOT_CMD_OPEN
 static int image_info (unsigned long addr);
+#endif
 #endif
 
 #if (CONFIG_COMMANDS & CFG_CMD_IMLS)
@@ -120,8 +125,12 @@ extern boot_os_Fcn do_bootm_linux;
 #ifdef CONFIG_SILENT_CONSOLE
 static void fixup_silent_linux (void);
 #endif
+#ifdef CONFIG_NETBSD
 static boot_os_Fcn do_bootm_netbsd;
+#endif
+#ifdef CONFIG_RTEMS
 static boot_os_Fcn do_bootm_rtems;
+#endif
 #if (CONFIG_COMMANDS & CFG_CMD_ELF)
 static boot_os_Fcn do_bootm_vxworks;
 static boot_os_Fcn do_bootm_qnxelf;
@@ -137,40 +146,91 @@ extern void lynxkdi_boot( image_header_t * );
 #endif
 
 image_header_t header;
+//kaiker
+ulong load_addr = /*0xBF050000;*/ CFG_LOAD_ADDR;		/* Default Load Address */
 
-ulong load_addr = CFG_LOAD_ADDR;		/* Default Load Address */
+static inline void mips_cache_set(u32 v)
+{
+	asm volatile ("mtc0 %0, $16" : : "r" (v));
+}
+
+
 
 int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
-	ulong	iflag;
 	ulong	addr;
 	ulong	data, len, checksum;
 	ulong  *len_ptr;
-	uint	unc_len = 0x400000;
+	uint	unc_len = 0x800000;
 	int	i, verify;
 	char	*name, *s;
 	int	(*appl)(int, char *[]);
 	image_header_t *hdr = &header;
 
+
+	mips_cache_set(3);
+
 	s = getenv ("verify");
 	verify = (s && (*s == 'n')) ? 0 : 1;
-
+    
 	if (argc < 2) {
 		addr = load_addr;
 	} else {
 		addr = simple_strtoul(argv[1], NULL, 16);
 	}
 
+	
 	SHOW_BOOT_PROGRESS (1);
 	printf ("## Booting image at %08lx ...\n", addr);
+
+#ifdef DUAL_IMAGE_SUPPORT
+	if (strcmp(getenv("Image1Stable"), "1") != 0) {
+		s = getenv("Image1Try");
+		if (s == NULL)
+			setenv("Image1Try", "1");
+		else {
+			char buf[32];
+	
+			i = (int)simple_strtoul(s, NULL, 10);
+			sprintf(buf, "%d", ++i);
+			setenv("Image1Try", buf);
+		}
+		saveenv();
+	}
+#endif
+
+   /* YJ, 5/16/2006 */
+   if (addr == 0x8A200000)
+	   ((void(*) (void)) (0x8A200000U))();	
+   else if(addr == 0x80200000)
+	   ((void(*) (void)) (0x80200000U))();	
+   else if(addr == 0x8A300000)
+	   ((void(*) (void)) (0x8A300000U))();	
+   else if(addr == 0x88001000)
+	   ((void(*) (void)) (0x88001000U))();	
+   else if(addr == 0x8B800000)
+	   ((void(*) (void)) (0x8B800000U))();	
 
 	/* Copy header so we can blank CRC field for re-calculation */
 #ifdef CONFIG_HAS_DATAFLASH
 	if (addr_dataflash(addr)){
 		read_dataflash(addr, sizeof(image_header_t), (char *)&header);
-	} else
+	}
 #endif
+
+#if defined (CFG_ENV_IS_IN_NAND)
+	if (addr >= CFG_FLASH_BASE)
+		ranand_read(&header, (char *)(addr - CFG_FLASH_BASE), sizeof(image_header_t));
+	else
+		memmove (&header, (char *)addr, sizeof(image_header_t));
+#elif defined (CFG_ENV_IS_IN_SPI)
+	if (addr >= CFG_FLASH_BASE)
+		raspi_read(&header, (char *)(addr - CFG_FLASH_BASE), sizeof(image_header_t));
+	else
+		memmove (&header, (char *)addr, sizeof(image_header_t));
+#else //CFG_ENV_IS_IN_FLASH
 	memmove (&header, (char *)addr, sizeof(image_header_t));
+#endif //CFG_ENV_IS_IN_FLASH
 
 	if (ntohl(hdr->ih_magic) != IH_MAGIC) {
 #ifdef __I386__	/* correct image format not implemented yet - fake it */
@@ -184,7 +244,7 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		} else
 #endif	/* __I386__ */
 	    {
-		puts ("Bad Magic Number\n");
+		printf ("Bad Magic Number,%08X \n",ntohl(hdr->ih_magic));
 		SHOW_BOOT_PROGRESS (-1);
 		return 1;
 	    }
@@ -205,7 +265,7 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	SHOW_BOOT_PROGRESS (3);
 
 	/* for multi-file images we need the data part, too */
-	print_image_hdr ((image_header_t *)addr);
+	print_image_hdr ((image_header_t *)hdr);
 
 	data = addr + sizeof(image_header_t);
 	len  = ntohl(hdr->ih_size);
@@ -215,6 +275,21 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		read_dataflash(data, len, (char *)CFG_LOAD_ADDR);
 		data = CFG_LOAD_ADDR;
 	}
+#endif
+
+#if defined (CFG_ENV_IS_IN_NAND)
+	if (addr >= CFG_FLASH_BASE) {
+		ulong load_addr = CFG_SPINAND_LOAD_ADDR;
+		ranand_read(load_addr, data - CFG_FLASH_BASE, len);
+		data = load_addr;
+	}
+#elif defined (CFG_ENV_IS_IN_SPI)
+	if (addr >= CFG_FLASH_BASE) {
+		ulong load_addr = CFG_SPINAND_LOAD_ADDR;
+		raspi_read(load_addr, data - CFG_FLASH_BASE, len);
+		data = load_addr;
+	}
+#else //CFG_ENV_IS_IN_FLASH
 #endif
 
 	if (verify) {
@@ -287,7 +362,7 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	 * recover from any failures any more...
 	 */
 
-	iflag = disable_interrupts();
+	//iflag = disable_interrupts();
 
 #ifdef CONFIG_AMIGAONEG3SE
 	/*
@@ -353,9 +428,35 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		}
 		break;
 #endif /* CONFIG_BZIP2 */
+#ifdef CONFIG_LZMA
+        case IH_COMP_LZMA:
+                printf ("   Uncompressing %s ... ", name);
+
+#ifdef CONFIG_UNCOMPRESS_TIME
+                tBUncompress = get_ticks();
+#endif
+		unsigned int destLen = 0;
+                i = lzmaBuffToBuffDecompress ((char*)ntohl(hdr->ih_load),
+                                &destLen, (char *)data, len);
+                if (i != LZMA_RESULT_OK) {
+                        printf ("LZMA ERROR %d - must RESET board to recover\n", i);
+                        SHOW_BOOT_PROGRESS (-6);
+                        udelay(100000);
+                        do_reset (cmdtp, flag, argc, argv);
+                }
+#ifdef CONFIG_UNCOMPRESS_TIME
+                tAUncompress = get_ticks();
+                tAUncompress = (tAUncompress - tBUncompress) >> 10;
+                printf("Uncompression time : %lu/%lu\n",tAUncompress,get_tbclk());
+                printf("Uncompression length is %d\n",destLen);
+#endif
+                break;
+#endif /* CONFIG_LZMA */
 	default:
+		/*
 		if (iflag)
 			enable_interrupts();
+			*/
 		printf ("Unimplemented compression type %d\n", hdr->ih_comp);
 		SHOW_BOOT_PROGRESS (-7);
 		return 1;
@@ -365,8 +466,10 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 
 	switch (hdr->ih_type) {
 	case IH_TYPE_STANDALONE:
+		/*
 		if (iflag)
 			enable_interrupts();
+			*/
 
 		/* load (and uncompress), but don't start if "autostart"
 		 * is set to "no"
@@ -385,8 +488,10 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		/* handled below */
 		break;
 	default:
+		/*
 		if (iflag)
 			enable_interrupts();
+			*/
 		printf ("Can't boot image type %d\n", hdr->ih_type);
 		SHOW_BOOT_PROGRESS (-8);
 		return 1;
@@ -402,10 +507,13 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	    do_bootm_linux  (cmdtp, flag, argc, argv,
 			     addr, len_ptr, verify);
 	    break;
+
+#ifdef CONFIG_NETBSD
 	case IH_OS_NETBSD:
 	    do_bootm_netbsd (cmdtp, flag, argc, argv,
 			     addr, len_ptr, verify);
 	    break;
+#endif
 
 #ifdef CONFIG_LYNXKDI
 	case IH_OS_LYNXOS:
@@ -414,10 +522,12 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	    break;
 #endif
 
+#ifdef CONFIG_RTEMS
 	case IH_OS_RTEMS:
 	    do_bootm_rtems (cmdtp, flag, argc, argv,
 			     addr, len_ptr, verify);
 	    break;
+#endif
 
 #if (CONFIG_COMMANDS & CFG_CMD_ELF)
 	case IH_OS_VXWORKS:
@@ -795,6 +905,7 @@ do_bootm_linux (cmd_tbl_t *cmdtp, int flag,
 }
 #endif /* CONFIG_PPC */
 
+#ifdef CONFIG_NETBSD
 static void
 do_bootm_netbsd (cmd_tbl_t *cmdtp, int flag,
 		int	argc, char *argv[],
@@ -851,7 +962,7 @@ do_bootm_netbsd (cmd_tbl_t *cmdtp, int flag,
 		for (i=2, len=0 ; i<argc ; i+=1) {
 			if (i > 2)
 				cmdline[len++] = ' ';
-			strcpy (&cmdline[len], argv[i]);
+			sprintf(&cmdline[len], argv[i]);
 			len += strlen (argv[i]);
 		}
 	} else if ((cmdline = getenv("bootargs")) == NULL) {
@@ -874,6 +985,7 @@ do_bootm_netbsd (cmd_tbl_t *cmdtp, int flag,
 	 */
 	(*loader) (gd->bd, img_addr, consdev, cmdline);
 }
+#endif
 
 #if defined(CONFIG_ARTOS) && defined(CONFIG_PPC)
 
@@ -997,6 +1109,7 @@ U_BOOT_CMD(
 #endif
 
 #if (CONFIG_COMMANDS & CFG_CMD_IMI)
+#ifdef RT2880_U_BOOT_CMD_OPEN
 int do_iminfo ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	int	arg;
@@ -1011,11 +1124,13 @@ int do_iminfo ( cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		addr = simple_strtoul(argv[arg], NULL, 16);
 		if (image_info (addr) != 0) rcode = 1;
 	}
+
 	return rcode;
 }
 
 static int image_info (ulong addr)
 {
+
 	ulong	data, len, checksum;
 	image_header_t *hdr = &header;
 
@@ -1052,9 +1167,12 @@ static int image_info (ulong addr)
 		return 1;
 	}
 	puts ("OK\n");
+	
 	return 0;
 }
+#endif
 
+#ifdef RT2880_U_BOOT_CMD_OPEN
 U_BOOT_CMD(
 	iminfo,	CFG_MAXARGS,	1,	do_iminfo,
 	"iminfo  - print header information for application image\n",
@@ -1063,15 +1181,19 @@ U_BOOT_CMD(
 	"      address 'addr' in memory; this includes verification of the\n"
 	"      image contents (magic number, header and payload checksums)\n"
 );
-
+#endif
 #endif	/* CFG_CMD_IMI */
 
 #if (CONFIG_COMMANDS & CFG_CMD_IMLS)
 /*-----------------------------------------------------------------------
  * List all images found in flash.
  */
+#ifdef RT2880_U_BOOT_CMD_OPEN
+ 
 int do_imls (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
+
+
 	flash_info_t *info;
 	int i, j;
 	image_header_t *hdr;
@@ -1122,6 +1244,8 @@ U_BOOT_CMD(
 	"    - Prints information about all images found at sector\n"
 	"      boundaries in flash.\n"
 );
+#endif
+
 #endif	/* CFG_CMD_IMLS */
 
 void
@@ -1139,6 +1263,7 @@ print_image_hdr (image_header_t *hdr)
 		tm.tm_year, tm.tm_mon, tm.tm_mday,
 		tm.tm_hour, tm.tm_min, tm.tm_sec);
 #endif	/* CFG_CMD_DATE, CONFIG_TIMESTAMP */
+
 	puts ("   Image Type:   "); print_type(hdr);
 	printf ("\n   Data Size:    %d Bytes = ", ntohl(hdr->ih_size));
 	print_size (ntohl(hdr->ih_size), "\n");
@@ -1215,6 +1340,7 @@ print_type (image_header_t *hdr)
 	case IH_COMP_NONE:	comp = "uncompressed";		break;
 	case IH_COMP_GZIP:	comp = "gzip compressed";	break;
 	case IH_COMP_BZIP2:	comp = "bzip2 compressed";	break;
+	case IH_COMP_LZMA:      comp = "lzma compressed";       break;
 	default:		comp = "unknown compression";	break;
 	}
 
@@ -1310,6 +1436,7 @@ void bz_internal_error(int errcode)
 }
 #endif /* CONFIG_BZIP2 */
 
+#ifdef CONFIG_RTEMS
 static void
 do_bootm_rtems (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[],
 		ulong addr, ulong *len_ptr, int verify)
@@ -1332,6 +1459,7 @@ do_bootm_rtems (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[],
 
 	(*entry_point ) ( gd->bd );
 }
+#endif
 
 #if (CONFIG_COMMANDS & CFG_CMD_ELF)
 static void
