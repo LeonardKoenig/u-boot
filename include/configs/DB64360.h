@@ -29,7 +29,7 @@
  * (c) 2002 Datentechnik AG - Project: Dino
  *
  *
- * $Id: DB64360.h,v 1.3 2003/04/26 04:58:13 brad Exp $
+ * $Id: DB64360.h,v 1.2 2010/11/15 10:42:22 jimmy_huang Exp $
  *
   ************************************************************************/
 
@@ -38,6 +38,9 @@
  * History:
  *
  *	$Log: DB64360.h,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.3  2003/04/26 04:58:13  brad
  *	Cosmetic changes and compiler warning cleanups
  *

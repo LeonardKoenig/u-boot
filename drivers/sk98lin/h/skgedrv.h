@@ -2,8 +2,8 @@
  *
  * Name:	skgedrv.h
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.6 $
- * Date:	$Date: 2002/07/15 15:38:01 $
+ * Version:	$Revision: 1.2 $
+ * Date:	$Date: 2010/11/15 10:42:22 $
  * Purpose:	Interface with the driver
  *
  ******************************************************************************/
@@ -26,6 +26,9 @@
  * History:
  *
  *	$Log: skgedrv.h,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.6  2002/07/15 15:38:01  rschmidt
  *	Power Management support
  *	Editorial changes

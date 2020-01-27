@@ -137,6 +137,7 @@ addr2info (ulong addr)
 int
 flash_write (char *src, ulong addr, ulong cnt)
 {
+#if !defined(CONFIG_ATH_NAND_FL)
 #ifdef CONFIG_SPD823TS
 	return (ERR_TIMOUT);	/* any other error codes are possible as well */
 #else
@@ -183,6 +184,9 @@ flash_write (char *src, ulong addr, ulong cnt)
 	}
 	return (ERR_OK);
 #endif /* CONFIG_SPD823TS */
+#else
+	return write_buff(NULL, src, addr, cnt);
+#endif /* CONFIG_ATH_NAND_FL */
 }
 
 /*-----------------------------------------------------------------------

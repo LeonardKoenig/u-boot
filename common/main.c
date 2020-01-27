@@ -36,8 +36,22 @@
 
 #include <post.h>
 
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#include <../httpd/bsp.h> //from www/bsp.h
+#if defined(HTTPD_SUPPORT) /* UID?? remind to fix it */
+extern void backup_mode_handle();
+#endif
+
 #ifdef CONFIG_SILENT_CONSOLE
 DECLARE_GLOBAL_DATA_PTR;
+#endif
+
+#ifdef CONFIG_DUALIMAGE_SUPPORT
+extern unsigned findbdr(unsigned int flashaddr);
 #endif
 
 #if defined(CONFIG_BOOT_RETRY_TIME) && defined(CONFIG_RESET_TO_RETRY)
@@ -382,7 +396,7 @@ void main_loop (void)
 	s = getenv ("bootdelay");
 	bootdelay = s ? (int)simple_strtol(s, NULL, 10) : CONFIG_BOOTDELAY;
 
-	debug ("### main_loop entered: bootdelay=%d\n\n", bootdelay);
+//	debug ("### main_loop entered: bootdelay=%d\n\n", bootdelay);
 
 # ifdef CONFIG_BOOT_RETRY_TIME
 	init_cmd_timeout ();
@@ -397,13 +411,41 @@ void main_loop (void)
 	else
 #endif /* CONFIG_BOOTCOUNT_LIMIT */
 		s = getenv ("bootcmd");
+       if (!s) {
+#ifdef CONFIG_ROOTFS_FLASH
+           /* XXX if rootfs is in flash, expect uImage to be in flash */
+#ifdef CONFIG_AR7100
+           setenv ("bootcmd", "bootm 0xbf200000");
+#else
+           setenv ("bootcmd", "bootm 0xbf450000");
+#endif /* CONFIG_AR7100 */
+#else
+           setenv ("bootcmd", "tftpboot 0x8022c090 uImage; bootm 0x8022c090");
+#endif
+       }
 
-	debug ("### main_loop: bootcmd=\"%s\"\n", s ? s : "<UNDEFINED>");
+#ifdef CONFIG_DUALIMAGE_SUPPORT
+		findbdr(0);
+#endif
+		s = getenv ("bootcmd");
+
+//	debug ("### main_loop: bootcmd=\"%s\"\n", s ? s : "<UNDEFINED>");
 
 	if (bootdelay >= 0 && s && !abortboot (bootdelay)) {
 # ifdef CONFIG_AUTOBOOT_KEYED
 		int prev = disable_ctrlc(1);	/* disable Control C checking */
 # endif
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+		if ( ( *((volatile unsigned long *)0xb8040004) & (1 << RESET_BUTTON)) == BUTTON_DOWN){
+			goto BACKUP_MODE_HTTPD;
+		}
+#endif
 
 # ifndef CFG_HUSH_PARSER
 		run_command (s, 0);
@@ -432,6 +474,28 @@ void main_loop (void)
 #endif /* CONFIG_MENUKEY */
 #endif	/* CONFIG_BOOTDELAY */
 
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+	/*	autoboot has been abort (any key has pressed)	*/
+	strcpy(s,CONFIG_BOOTCOMMAND);
+	/* todo: use GPIO pin number */
+	if ( ( *((volatile unsigned long *)0xb8040004) & (1 << RESET_BUTTON)) == BUTTON_DOWN){
+		/* Reset Button has been pressed */
+BACKUP_MODE_HTTPD:
+		printf("Reset Button Push down !\n");
+		backup_mode_handle();
+	}
+	else
+	{
+	    run_command (s, 0);
+	}
+#endif
+
+
 #ifdef CONFIG_AMIGAONEG3SE
 	{
 	    extern void video_banner(void);
@@ -448,6 +512,7 @@ void main_loop (void)
 	for (;;);
 #else
 	for (;;) {
+		// Entering loader command
 #ifdef CONFIG_BOOT_RETRY_TIME
 		if (rc >= 0) {
 			/* Saw enough of a valid command to

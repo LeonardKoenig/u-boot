@@ -49,6 +49,42 @@ typedef struct {
 #endif
 } flash_info_t;
 
+typedef struct {
+	u_int8_t	sa1	: 1,	// Serial access time (bit 1)
+			org	: 1,	// Organisation
+			bs	: 2,	// Block size
+			sa0	: 1,	// Serial access time (bit 0)
+			ss	: 1,	// Spare size per 512 bytes
+			ps	: 2,	// Page Size
+
+			wc	: 1,	// Write Cache
+			ilp	: 1, 	// Interleaved Programming
+			nsp	: 2, 	// No. of simult prog pages
+			ct	: 2,	// Cell type
+			dp	: 2,	// Die/Package
+
+			did,		// Device id
+			vid,		// Vendor id
+
+			res1	: 2,	// Reserved
+			pls	: 2,	// Plane size
+			pn	: 2,	// Plane number
+			res2	: 2;	// Reserved
+} ath_nand_id_t __attribute__ ((aligned (16)));
+
+typedef struct {
+	u_int64_t	size;	 /* Total size of the MTD */
+	u_int32_t	erasesize,
+			erasesize_shift;
+	ath_nand_id_t	id;
+	u_int32_t	erasesize_mask,
+			writesize,
+			writesize_shift,
+			writesize_mask,
+			oobsize,
+			ecc_offset;
+} ath_nand_flinfo_t;
+
 /*
  * Values for the width of the port
  */
@@ -415,6 +451,8 @@ extern void flash_read_factory_serial(flash_info_t * info, void * buffer, int of
 #define FLASH_FUJLV650	0x00D0		/* Fujitsu MBM 29LV650UE/651UE		*/
 #define FLASH_MT28S4M16LC 0x00E1	/* Micron MT28S4M16LC			*/
 #define FLASH_S29GL064M 0x00F0		/* Spansion S29GL064M-R6		*/
+
+#define FLASH_M25P64    0x00F2      
 
 #define FLASH_UNKNOWN	0xFFFF		/* unknown flash type			*/
 

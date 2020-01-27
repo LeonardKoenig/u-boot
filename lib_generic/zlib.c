@@ -2101,7 +2101,9 @@ z_stream *z;
 
 /* From: zutil.c,v 1.8 1995/05/03 17:27:12 jloup Exp */
 
+#ifndef COMPRESSED_UBOOT
 char *zlib_version = ZLIB_VERSION;
+#endif
 
 char *z_errmsg[] = {
 "stream end",          /* Z_STREAM_END    1 */

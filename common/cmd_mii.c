@@ -28,6 +28,7 @@
 #include <common.h>
 #include <command.h>
 
+#ifndef COMPRESSED_UBOOT
 #if (CONFIG_COMMANDS & CFG_CMD_MII)
 #include <miiphy.h>
 
@@ -593,5 +594,89 @@ U_BOOT_CMD(
 );
 
 #endif /* CONFIG_TERSE_MII */
-
 #endif /* CFG_CMD_MII */
+#endif /* #ifndef COMPRESSED_UBOOT */
+
+#ifdef BOARDCAL
+extern flash_info_t flash_info[];	/* info for FLASH chips */
+
+/**********************************************************************************
+** do_mac_setting
+**
+** This is the executable portion of the progmac command.  This will process the
+** MAC address strings, and program them into the appropriate flash sector..
+**
+*/
+
+int do_mac (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[])
+{
+    char    sectorBuff[CFG_FLASH_SECTOR_SIZE];
+    int     serno;
+
+    /*
+    ** Argv[1] contains the value string.  Convert to binary, and program the
+    ** values in flash
+    */
+    
+    serno = simple_strtoul(argv[1],0,10);
+    
+    /*
+    ** If the serial number is less than 0, or greater than 0x1fff, it's out of range
+    */
+    
+    if(serno < 0 || serno > 0x1fff)
+    {
+        printf("Serno out of range\n",serno);
+        return 1;
+    }
+    
+    /*
+    ** Create the 24 bit number that composes the lower 3 bytes of the MAC address
+    */
+    
+    serno = 0xFFFFFF & ( (ATHEROS_PRODUCT_ID << 13) | (serno & 0x1fff));
+    
+    /*
+    ** Get the values from flash, and program into the MAC address registers
+    */
+    
+    memcpy(sectorBuff,(void *)BOARDCAL, CFG_FLASH_SECTOR_SIZE);
+    
+    /*
+    ** Set the first and second values
+    */
+    
+    sectorBuff[0] = 0x00;
+    sectorBuff[1] = 0x03;
+    sectorBuff[2] = 0x7f;
+
+    sectorBuff[3] = 0xFF & (serno >> 16);
+    sectorBuff[4] = 0xFF & (serno >> 8);
+    sectorBuff[5] = 0xFF &  serno;
+    
+    /*
+    ** Increment by 1 for the second MAC address
+    */
+
+    serno++;    
+    memcpy(&sectorBuff[6],&sectorBuff[0],3);
+    sectorBuff[9]  = 0xFF & (serno >> 16);
+    sectorBuff[10] = 0xFF & (serno >> 8);
+    sectorBuff[11] = 0xFF &  serno;
+    
+    flash_erase(flash_info,CAL_SECTOR,CAL_SECTOR);
+    write_buff(flash_info,sectorBuff, BOARDCAL, CFG_FLASH_SECTOR_SIZE);
+    
+    return 0;
+}
+
+U_BOOT_CMD(
+    progmac, 2, 0, do_mac,
+    "progmac - Set ethernet MAC addresses\n",
+    "progmac <serno> - Program the MAC addresses\n"
+    "                <serno> is the value of the last\n"
+    "                4 digits (decimal) of the serial number\n"
+);
+
+#endif /* BOARDCAL */
+

@@ -1,4 +1,4 @@
-/* $Id$ */
+/* $Id: ppc.h,v 1.1.1.1 2010/11/01 10:40:42 nick_chou Exp $ */
 
 #ifndef _PPC_H
 #define _PPC_H

@@ -89,6 +89,7 @@ endif
 HOSTCFLAGS	= -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer
 HOSTSTRIP	= strip
 
+COMPRESS    = lzma
 #########################################################################
 #
 # Option checker (courtesy linux kernel) to ensure
@@ -111,14 +112,18 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 OBJDUMP = $(CROSS_COMPILE)objdump
 RANLIB	= $(CROSS_COMPILE)RANLIB
 
+.depend : CC = @$(CROSS_COMPILE)gcc
+
 RELFLAGS= $(PLATFORM_RELFLAGS)
-DBGFLAGS= -g #-DDEBUG
+#DBGFLAGS= -g #-DDEBUG
 OPTFLAGS= -Os #-fomit-frame-pointer
 ifndef LDSCRIPT
 #LDSCRIPT := $(TOPDIR)/board/$(BOARDDIR)/u-boot.lds.debug
 LDSCRIPT := $(TOPDIR)/board/$(BOARDDIR)/u-boot.lds
 endif
 OBJCFLAGS += --gap-fill=0xff
+
+LDSCRIPT_BOOTSTRAP := $(TOPDIR)/board/$(BOARDDIR)/u-boot-bootstrap.lds
 
 gccincdir := $(shell $(CC) -print-file-name=include)
 
@@ -132,7 +137,30 @@ ifdef BUILD_TAG
 CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes \
 	-DBUILD_TAG='"$(BUILD_TAG)"'
 else
-CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes
+CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes 
+ifeq ($(COMPRESSED_UBOOT),1)
+CFLAGS += -DCOMPRESSED_UBOOT=1
+endif
+
+ifeq ($(REDUCED_UBOOT_SIZE),1)
+CFLAGS += -DREDUCED_UBOOT_SIZE=1
+endif
+
+ifeq ($(BUILD_OPTIMIZED),y)
+CFLAGS += -Os -funit-at-a-time -mips32r2 -mtune=mips32r2
+endif
+endif
+
+ifeq ($(BUILD_TYPE),jffs2)
+CFLAGS += -DROOTFS=1
+else
+ifeq ($(BUILD_TYPE),squashfs)
+CFLAGS += -DROOTFS=2
+endif
+endif
+
+ifdef ATH_SST_FLASH
+CFLAGS += -DATH_SST_FLASH=1
 endif
 
 # avoid trigraph warnings while parsing pci.h (produced by NIOS gcc-2.9)
@@ -143,10 +171,27 @@ CFLAGS := $(CPPFLAGS) -Wall -Wno-trigraphs
 endif
 endif
 
+ifeq ($(BUILD_TYPE),jffs2)
+CFLAGS += -DROOTFS=1
+else
+ifeq ($(BUILD_TYPE),squashfs)
+CFLAGS += -DROOTFS=2
+endif
+endif
+
 AFLAGS_DEBUG := -Wa,-gstabs
+
 AFLAGS := $(AFLAGS_DEBUG) -D__ASSEMBLY__ $(CPPFLAGS)
 
+ifeq ($(COMPRESSED_UBOOT),1)
+AFLAGS += -DCOMPRESSED_UBOOT=1
+endif
+
 LDFLAGS += -Bstatic -T $(LDSCRIPT) -Ttext $(TEXT_BASE) $(PLATFORM_LDFLAGS)
+
+ifeq ($(COMPRESSED_UBOOT), 1)
+LDFLAGS_BOOTSTRAP += -Bstatic -T $(LDSCRIPT_BOOTSTRAP) -Ttext $(BOOTSTRAP_TEXT_BASE) $(PLATFORM_LDFLAGS)
+endif
 
 # Location of a usable BFD library, where we define "usable" as
 # "built for ${HOST}, supports ${TARGET}".  Sensible values are
@@ -175,6 +220,8 @@ ifeq ($(PCI_CLOCK),PCI_66M)
 CFLAGS := $(CFLAGS) -DPCI_66M
 endif
 
+CFLAGS += $(UBOOT_GCC_4_3_3_EXTRA_CFLAGS) -g
+
 #########################################################################
 
 export	CONFIG_SHELL HPATH HOSTCC HOSTCFLAGS CROSS_COMPILE \
@@ -182,13 +229,32 @@ export	CONFIG_SHELL HPATH HOSTCC HOSTCFLAGS CROSS_COMPILE \
 	MAKE
 export	TEXT_BASE PLATFORM_CPPFLAGS PLATFORM_RELFLAGS CPPFLAGS CFLAGS AFLAGS
 
+ifeq ($(V),1)
+  Q =
+else
+  Q = @
+endif
+
+export quiet Q V
+
 #########################################################################
 
 %.s:	%.S
-	$(CPP) $(AFLAGS) -o $@ $(CURDIR)/$<
+ifneq ($(V),1)
+	@echo [CPP] $(CURDIR)/$<
+endif
+	$(Q)$(CPP) $(AFLAGS) -o $@ $(CURDIR)/$<
+
 %.o:	%.S
-	$(CC) $(AFLAGS) -c -o $@ $(CURDIR)/$<
+ifneq ($(V),1)
+	@echo [CC] $(CURDIR)/$<
+endif
+	$(Q)$(CC) $(AFLAGS) -c -o $@ $(CURDIR)/$<
+
 %.o:	%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+ifneq ($(V),1)
+	@echo [CC] $(CURDIR)/$<
+endif
+	$(Q)$(CC) $(CFLAGS) -c -o $@ $<
 
 #########################################################################

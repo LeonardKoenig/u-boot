@@ -26,8 +26,12 @@ include $(TOPDIR)/config.mk
 # CFLAGS += -DET_DEBUG -DDEBUG
 
 LIB	= libnet.a
-
+ifeq ($(COMPRESSED_UBOOT),1)
+OBJS	= net.o tftp.o rarp.o eth.o
+else
 OBJS	= net.o tftp.o bootp.o rarp.o eth.o nfs.o sntp.o
+endif
+
 all:	$(LIB)
 
 $(LIB):	$(START) $(OBJS)

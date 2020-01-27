@@ -17,7 +17,7 @@
  *    along with this program; if not, write to the Free Software
  *    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
  */
-#ident "$Id:$"
+#ident "$Id: cmd_ace.c,v 1.1.1.1 2010/11/01 10:41:28 nick_chou Exp $"
 
 /*
  * The Xilinx SystemACE chip support is activated by defining

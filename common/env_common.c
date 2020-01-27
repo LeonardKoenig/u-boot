@@ -207,7 +207,7 @@ void env_relocate (void)
 	enable_nvram();
 #endif
 
-#ifdef ENV_IS_EMBEDDED
+#if defined(ENV_IS_EMBEDDED) || defined(CONFIG_ATH_NAND_FL)
 	/*
 	 * The environment buffer is embedded with the text segment,
 	 * just relocate the environment pointer
@@ -252,7 +252,12 @@ void env_relocate (void)
 		gd->env_valid = 1;
 	}
 	else {
+#ifdef CONFIG_ATH_NAND_FL
+		unsigned char *old_env = (unsigned char *)env_ptr - gd->reloc_off;
+		memcpy(env_ptr, old_env, CFG_ENV_SIZE);
+#else
 		env_relocate_spec ();
+#endif
 	}
 	gd->env_addr = (ulong)&(env_ptr->data);
 

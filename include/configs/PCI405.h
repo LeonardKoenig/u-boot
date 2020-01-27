@@ -32,6 +32,11 @@
  * High Level Configuration Options
  * (easy to change)
  */
+/*
+*  Date: 2011-030-24 
+*  Name: Charles Teng
+*  Reason: patch from LSDK-9.2.0.312
+*/
 #define CONFIG_IDENT_STRING     " $Name: esd_PCI405_05_07_28 $"
 
 #define CONFIG_405GP		1	/* This is a PPC405 CPU		*/

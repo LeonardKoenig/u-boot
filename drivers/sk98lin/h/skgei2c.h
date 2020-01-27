@@ -2,8 +2,8 @@
  *
  * Name:	skgei2c.h
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.23 $
- * Date:	$Date: 2002/12/19 14:34:27 $
+ * Version:	$Revision: 1.2 $
+ * Date:	$Date: 2010/11/15 10:42:22 $
  * Purpose:	Special GEnesis defines for TWSI
  *
  ******************************************************************************/
@@ -26,6 +26,9 @@
  * History:
  *
  *	$Log: skgei2c.h,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.23  2002/12/19 14:34:27  rschmidt
  *	Added cast in macros SK_I2C_SET_BIT() and SK_I2C_CLR_BIT()
  *	Editorial changes (TWSI)

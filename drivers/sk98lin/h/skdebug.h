@@ -2,8 +2,8 @@
  *
  * Name:	skdebug.h
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.12 $
- * Date:	$Date: 2002/07/15 15:37:13 $
+ * Version:	$Revision: 1.2 $
+ * Date:	$Date: 2010/11/15 10:42:22 $
  * Purpose:	SK specific DEBUG support
  *
  ******************************************************************************/
@@ -25,6 +25,9 @@
  *
  * History:
  *	$Log: skdebug.h,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.12  2002/07/15 15:37:13  rschmidt
  *	Power Management support
  *	Editorial changes

@@ -28,6 +28,10 @@
 #include <asm/byteorder.h>
 #include <asm/addrspace.h>
 
+#ifdef CONFIG_AR7240
+#include <ar7240_soc.h>
+#include "../httpd/bsp.h"
+#endif
 DECLARE_GLOBAL_DATA_PTR;
 
 #define	LINUX_MAX_ENVS		256
@@ -54,6 +58,88 @@ static int	linux_env_idx;
 static void linux_params_init (ulong start, char * commandline);
 static void linux_env_set (char * env_name, char * env_val);
 
+/*
+*  Date: 2011-030-21 
+*  Name: Charles Teng
+*  Reason: patch from LSDK-9.2.0.303
+*	   WASP 1.1 support
+*/
+#ifdef CONFIG_WASP_SUPPORT
+void wasp_set_cca(void)
+{
+	/* set cache coherency attribute */
+	asm(	"mfc0	$t0,	$16\n"		/* CP0_CONFIG == 16 */
+		"li	$t1,	~7\n"
+		"and	$t0,	$t0,	$t1\n"
+		"ori	$t0,	3\n"		/* CONF_CM_CACHABLE_NONCOHERENT */
+		"mtc0	$t0,	$16\n"		/* CP0_CONFIG == 16 */
+		"nop\n": : );
+}
+#endif
+
+static char *update_bootargs(const char *args, char *buf, const image_header_t *h, ulong data, ulong *len_ptr)
+{
+	char *p = buf;
+	int klen = ntohl(h->ih_size);
+	int pad;
+
+#define BLOCK_SIZE 0x10000
+	strcpy(p, "console=ttyS0,115200 " CONFIG_ROOT_BOOTARGS " init=/sbin/init ");
+	/* XXX: How about if pad = 0x10000 when @klen+head aligment to BLOCK_SIZE
+	 * to avoid the case of when eg: 'pad = BLOCK_SIZE - 0' then @pad = 0x1000
+	 * so @pad % BLOCK_SIZE again to make @pad as '0'
+ 	 */
+	pad = (BLOCK_SIZE - ((klen + sizeof(image_header_t)) % BLOCK_SIZE)) % BLOCK_SIZE;
+
+#ifdef BUILD_OPTIMIZED_4M
+	sprintf(buf + strlen(buf), "mtdparts=ath-nor0:64k(u-boot),64k(nvram),%dk(linux4),"
+		"%dk@0x%08x(rootfs),192k(LANG),64k(ART)",
+		((FLASH_SIZE * 1024) - 64 - 64 - 192 - 64 ),
+		(((FLASH_SIZE * 1024 - 64 - 64 - 192 - 64 ) * 1024) - (klen + pad + sizeof(image_header_t)))/1024,
+		0x20000  + /* loader + nvram */ h->ih_size + pad + sizeof(image_header_t)/*kernel + pad */);
+#elif FLASH_SIZE == 16
+#ifndef CONFIG_DUAL_IMAGES
+	sprintf(buf + strlen(buf), "mtdparts=ath-nor0:64k(u-boot),64k(nvram),%dk(linux),"
+		"%dk@0x%08x(rootfs),192k(LANG),64k(MAC),64k(ART)",
+		((FLASH_SIZE * 1024) - 64 - 64 - 192 - 64 - 64 ),
+		(((FLASH_SIZE * 1024 - 64 - 64 - 192 - 64 - 64 ) * 1024) - (klen + pad + sizeof(image_header_t)))/1024,
+		0x20000  + /* loader + nvram */ h->ih_size + pad + sizeof(image_header_t)/*kernel + pad */);
+#else
+	{
+	int img, fs, hlen;
+	int i;
+
+	if (h->ih_type != IH_TYPE_MULTI) {
+		printf("XXX[%s:%d] Error: Dual Image MUST be Multi type image\n", __FUNCTION__, __LINE__);
+		return NULL;
+	}
+	/* over write */
+	img = ((FLASH_SIZE * 1024) - 64 - 64 - 256 - 64 - 64 ) >> 1;
+	klen = ntohl(len_ptr[0]);
+	hlen = sizeof(image_header_t) + 8;
+	for (i = 1; len_ptr[i]; i++)
+		hlen += 4;
+	pad = (BLOCK_SIZE - ((klen + hlen) % BLOCK_SIZE)) % BLOCK_SIZE;
+	printf("len_ptr: %08X data: %08X, len[0]=%08X, len[1]=%08X, hlen:%d, klen:%d, pad:%d, total:%08X\n",
+		len_ptr[0], data, len_ptr[0], len_ptr[1], hlen, klen, pad, hlen+klen+pad);
+	fs = (img * 1024  - (hlen + klen + pad))/1024;
+	sprintf(buf + strlen(buf), "mtdparts=ath-nor0:64k(u-boot),64k(nvram),%dk(linux),"
+		"%dk@0x%08x(rootfs),%dk(mirror),256k(LANG),64k(MAC),64k(ART)",
+		img, fs,
+		0x20000  + /* loader + nvram */ hlen + klen + pad/*imageHeader kernel + pad */, img);
+	}
+#endif //FLASH_DUAL_IMAGE
+#else
+	// FLASH 8M...
+	sprintf(buf + strlen(buf), "mtdparts=ath-nor0:64k(u-boot),64k(nvram),%dk(linux),"
+		"%dk@0x%08x(rootfs),192k(LANG),64k(ART)",
+		((FLASH_SIZE * 1024) - 64 - 64 - 192 - 64 ),
+		(((FLASH_SIZE * 1024 - 64 - 64 - 192 - 64 ) * 1024) - (klen + pad + sizeof(image_header_t)))/1024,
+		0x20000  + /* loader + nvram */ h->ih_size + pad + sizeof(image_header_t)/*kernel + pad */);
+#endif
+
+	return buf;
+}
 
 void do_bootm_linux (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[],
 		     ulong addr, ulong * len_ptr, int verify)
@@ -61,13 +147,25 @@ void do_bootm_linux (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[],
 	ulong len = 0, checksum;
 	ulong initrd_start, initrd_end;
 	ulong data;
+#if defined(CONFIG_AR7100) || defined(CONFIG_AR7240)
+    int flash_size_mbytes;
+	void (*theKernel) (int, char **, char **, int);
+#else
 	void (*theKernel) (int, char **, char **, int *);
+#endif
 	image_header_t *hdr = &header;
 	char *commandline = getenv ("bootargs");
+	char commandline2[256];
 	char env_buf[12];
+    
 
+#if defined(CONFIG_AR7100) || defined(CONFIG_AR7240)
+	theKernel =
+		(void (*)(int, char **, char **, int)) ntohl (hdr->ih_ep);
+#else
 	theKernel =
 		(void (*)(int, char **, char **, int *)) ntohl (hdr->ih_ep);
+#endif
 
 	/*
 	 * Check if there is an initrd image
@@ -181,6 +279,12 @@ void do_bootm_linux (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[],
 	printf ("## Transferring control to Linux (at address %08lx) ...\n",
 		(ulong) theKernel);
 #endif
+	printf ("## bootargs 0: %s...\n", commandline);
+	if (!(getenv("auto_bootargs") && strcmp(getenv("auto_bootargs"),"0") == 0)) {
+		update_bootargs(commandline, commandline2, hdr, data, len_ptr);
+		commandline = commandline2;
+	}
+	printf ("## bootargs @%08X: %s...\n", UNCACHED_SDRAM (gd->bd->bi_boot_params), commandline);
 
 	linux_params_init (UNCACHED_SDRAM (gd->bd->bi_boot_params), commandline);
 
@@ -213,12 +317,29 @@ void do_bootm_linux (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[],
 	/* we assume that the kernel is in place */
 	printf ("\nStarting kernel ...\n\n");
 
+/*
+*  Date: 2011-030-21 
+*  Name: Charles Teng
+*  Reason: patch from LSDK-9.2.0.303
+*	   WASP 1.1 support
+*/
+#ifdef CONFIG_WASP_SUPPORT
+	wasp_set_cca();
+#endif
+
+#if defined(CONFIG_AR7100) || defined(CONFIG_AR7240)
+    /* Pass the flash size as expected by current Linux kernel for AR7100 */
+    flash_size_mbytes = gd->bd->bi_flashsize/(1024 * 1024);
+	theKernel (linux_argc, linux_argv, linux_env, flash_size_mbytes);
+#else
 	theKernel (linux_argc, linux_argv, linux_env, 0);
+#endif
 }
 
 static void linux_params_init (ulong start, char *line)
 {
 	char *next, *quote, *argp;
+	char memstr[32];
 
 	linux_argc = 1;
 	linux_argv = (char **) start;
@@ -226,6 +347,12 @@ static void linux_params_init (ulong start, char *line)
 	argp = (char *) (linux_argv + LINUX_MAX_ARGS);
 
 	next = line;
+
+	if (strstr(line, "mem=")) {
+		memstr[0] = 0;
+	} else {
+		memstr[0] = 1;
+	}
 
 	while (line && *line && linux_argc < LINUX_MAX_ARGS) {
 		quote = strchr (line, '"');
@@ -249,6 +376,18 @@ static void linux_params_init (ulong start, char *line)
 		linux_argv[linux_argc] = argp;
 		memcpy (argp, line, next - line);
 		argp[next - line] = 0;
+#if defined(CONFIG_AR7240)
+#define REVSTR	"REVISIONID"
+#define PYTHON	"python"
+#define VIRIAN	"virian"
+		if (strcmp(argp, REVSTR) == 0) {
+			if (is_ar7241() || is_ar7242()) {
+				strcpy(argp, VIRIAN);
+			} else {
+				strcpy(argp, PYTHON);
+			}
+		}
+#endif
 
 		argp += next - line + 1;
 		linux_argc++;
@@ -258,6 +397,17 @@ static void linux_params_init (ulong start, char *line)
 
 		line = next;
 	}
+
+#if defined(CONFIG_AR9100) || defined(CONFIG_AR7240)
+	/* Add mem size to command line */
+	if (memstr[0]) {
+		sprintf(memstr, "mem=%luM", gd->ram_size >> 20);
+		memcpy (argp, memstr, strlen(memstr)+1);
+		linux_argv[linux_argc] = argp;
+		linux_argc++;
+		argp += strlen(memstr) + 1;
+	}
+#endif
 
 	linux_env = (char **) (((ulong) argp + 15) & ~15);
 	linux_env[0] = 0;

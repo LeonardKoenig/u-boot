@@ -28,6 +28,7 @@
 #include <version.h>
 #include <net.h>
 #include <environment.h>
+#include "../httpd/bsp.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -113,6 +114,7 @@ static int display_banner(void)
 {
 
 	printf ("\n\n%s\n\n", version_string);
+
 	return (0);
 }
 
@@ -159,20 +161,155 @@ static int init_baudrate (void)
 typedef int (init_fnc_t) (void);
 
 init_fnc_t *init_sequence[] = {
+#ifndef COMPRESSED_UBOOT
 	timer_init,
+#endif
 	env_init,		/* initialize environment */
 #ifdef CONFIG_INCA_IP
 	incaip_set_cpuclk,	/* set cpu clock according to environment variable */
 #endif
 	init_baudrate,		/* initialze baudrate settings */
+#ifndef COMPRESSED_UBOOT
 	serial_init,		/* serial communications setup */
+#endif
 	console_init_f,
 	display_banner,		/* say that we are here */
+#ifndef COMPRESSED_UBOOT
 	checkboard,
-	init_func_ram,
+        init_func_ram,
+#endif
 	NULL,
 };
+#ifdef CONFIG_AR7240
+/*
+ * Generic GPIO for WASP/AR7240,
+ * porting come from linux kernel SDK.
+ * */
+static unsigned long ath_reg_rd(addr)
+{
+	return *(volatile unsigned long *)addr;
+}
+static void ath_reg_wr(unsigned long reg, unsigned long val)
+{
+	*(volatile unsigned long *)reg = val;
+}
+static void ath_gpio_setup(int n)
+{
+#define ATH_GPIO_OUT_FUNCTION0 0xb804002C
+        volatile unsigned long reg;
+        unsigned long val;
 
+        /* Each 4 gpio_pins mapped to one register [0:31] */
+        reg = (ATH_GPIO_OUT_FUNCTION0) + (n & ~0x3);
+        val = ath_reg_rd(reg);
+
+        /* setup pin n as gpio function '0x0' to register, each gpio 8 bits */
+        val = val & ~(0xFF << ((n % 4) * 8));
+        ath_reg_wr(reg, val);
+}
+
+static void ath_reg_rmw_set(unsigned long reg, int mask)
+{
+	*(volatile unsigned long *)reg |= mask;
+}
+static void ath_reg_rmw_clear(unsigned long reg, int mask)
+{
+	*(volatile unsigned long *)reg &= ~(mask);
+}
+
+void ath_gpio_config_input(int gpio)
+{
+#define ATH_GPIO_OE 0xb8040000
+        ath_gpio_setup(gpio);
+        ath_reg_rmw_set(ATH_GPIO_OE, (1 << gpio));
+}
+void ath_gpio_config_output(int gpio)
+{
+        ath_gpio_setup(gpio);
+        ath_reg_rmw_clear(ATH_GPIO_OE, (1 << gpio));
+}
+void ath_gpio_out_val(int gpio, int val)
+{
+#define ATH_GPIO_OUT 0xb8040008
+        if (val & 0x1) {
+                ath_reg_rmw_set(ATH_GPIO_OUT, (1 << gpio));
+        } else {
+                ath_reg_rmw_clear(ATH_GPIO_OUT, (1 << gpio));
+        }
+}
+#endif //CONFIG_AR7240
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : GPIO for Reset button
+*   Note    : 
+*/
+#if defined(HTTPD_SUPPORT)
+/*
+GPIO 16, jump start sw, temporary used for reset button, to check if we need to entering backup mode
+*/
+void init_ar7240_gpio(void)
+{
+#ifdef POWER_LED
+	*(volatile int *)(0xb8040040) = 0x00002c2b;
+#endif
+	*(volatile int *)(0xb8040000) &= ~(1 << STATUS_LED);
+	*(volatile int *)(0xb8040008) &= ~(1 << STATUS_LED);	//status led_on => low active
+	*(volatile int *)(0xb8040008) |= ((1 << INTERNET_LED_2) | (1 << WIRELESS_LED));	//internet, wifi led_off
+#ifdef POWER_LED
+	*(volatile int *)(0xb8040008) |= (1<<POWER_LED);	//power off
+#endif
+#ifdef INTERNET_LED_1
+	*(volatile int *)(0xb8040008) |= (1 << INTERNET_LED_1);
+#endif
+#ifdef WIRELESS_LED_1
+	*(volatile int *)(0xb8040000) &= ~(1 << WIRELESS_LED_1); // GPIO Output enable
+	*(volatile int *)(0xb8040008) |= (1 << WIRELESS_LED_1);  // GPIO Output value
+#endif
+#ifdef WPS_LED_GPIO
+	*(volatile int *)(0xb8040000) &= ~(1 << WPS_LED_GPIO); // GPIO Output enable
+	*(volatile int *)(0xb8040008) |= (1 << WPS_LED_GPIO);  // GPIO Output value
+#endif
+#ifdef SWITCH_CONTROL
+	/* turn off led by sw to avoid of led blinking when HW reset,
+	 * I just want to follow SPEC.
+	 * */
+	ath_gpio_config_output(SWITCH_CONTROL);
+	ath_gpio_out_val(SWITCH_CONTROL, 1);
+#endif
+
+}
+void init_gpio(void)
+{
+	/* Enable GPIO 16 as INPUT */
+	*(volatile int *)(0xb8040000) |= (1 << 16);
+// 	*(volatile int *)(0xb8040000) |= (1 | (1<<1) | (1<<6) | (1<<7) | (1<<17) | (1<<13) | (1<<14) | (1<<15) | (1<<16));
+// 	*(volatile int *)(0xb8040028) |= (1);
+// 	*(volatile int *)(0xb8040008) &=~(1 << 6);
+#ifndef CONFIG_AP123
+	init_ar7240_gpio();
+#else
+	/* Enable GPIO function */
+	*(volatile int *)(0xb8040000) &= ~((1 << STATUS_LED)|(1 << LAN1_LED) | (1 << LAN2_LED) | (1 << LAN3_LED) | (1 << LAN4_LED) | (1 << WIRELESS_LED));
+	//# 12 13 14 15
+	//mm 0xb8040038 0x00003229
+	*(volatile int *)(0xb8040038) = 0x00000000;
+	//# 16 17 18 19
+	//mm 0xb804003c 0x2a2d0000
+	*(volatile int *)(0xb804003c) = 0x2a290000;
+	//# 20 21 
+	//mm 0xb8040040 0x00002c2b	
+	*(volatile int *)(0xb8040040) = 0x00002c2b;
+	
+	*(volatile int *)(0xb8040008) |= (1 << STATUS_LED);				//status led_on => high active
+	*(volatile int *)(0xb8040008) |= ((1 << INTERNET_LED_2) | (1 << WIRELESS_LED));	//internet led_off
+
+#ifdef GPIO_ACTIVE_HIGH_LOW_MAP
+	*(volatile int *)(0xb8040008) |= ~(GPIO_ACTIVE_HIGH_LOW_MAP);
+#endif
+	
+#endif		
+}
+#endif
 
 void board_init_f(ulong bootflag)
 {
@@ -181,8 +318,20 @@ void board_init_f(ulong bootflag)
 	init_fnc_t **init_fnc_ptr;
 	ulong addr, addr_sp, len = (ulong)&uboot_end - CFG_MONITOR_BASE;
 	ulong *s;
+#ifdef COMPRESSED_UBOOT
+        char board_string[50];
+#endif
 #ifdef CONFIG_PURPLE
 	void copy_code (ulong);
+#endif
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : GPIO for Reset button
+*   Note    : 
+*/
+#if defined(HTTPD_SUPPORT)
+	init_gpio();
 #endif
 
 	/* Pointer is writable since we allocated a register for it.
@@ -198,6 +347,14 @@ void board_init_f(ulong bootflag)
 			hang ();
 		}
 	}
+
+#ifdef COMPRESSED_UBOOT
+        checkboard(board_string);
+        printf("%s\n\n",board_string);
+        gd->ram_size = bootflag;
+	puts ("DRAM:  ");
+	print_size (gd->ram_size, "\n");
+#endif
 
 	/*
 	 * Now that we have DRAM mapped and working, we can
@@ -391,6 +548,8 @@ void board_init_r (gd_t *id, ulong dest_addr)
 
 	jumptable_init ();
 
+	init_gpio();
+
 	/* Initialize the console (after the relocation and devices init) */
 	console_init_r ();
 /** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** **/
@@ -415,6 +574,10 @@ void board_init_r (gd_t *id, ulong dest_addr)
 	puts ("Net:   ");
 #endif
 	eth_initialize(gd->bd);
+#endif
+
+#ifdef ATH_DUAL_FLASH
+	ath_nand_flash_init();
 #endif
 
 	/* main_loop() can return to retry autoboot, if so just run it again. */

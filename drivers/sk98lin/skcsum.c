@@ -2,8 +2,8 @@
  *
  * Name:	skcsum.c
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.10 $
- * Date:	$Date: 2002/04/11 10:02:04 $
+ * Version:	$Revision: 1.2 $
+ * Date:	$Date: 2010/11/15 10:42:22 $
  * Purpose:	Store/verify Internet checksum in send/receive packets.
  *
  ******************************************************************************/
@@ -26,6 +26,9 @@
  * History:
  *
  *	$Log: skcsum.c,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.10  2002/04/11 10:02:04  rwahl
  *	Fix in SkCsGetSendInfo():
  *	- function did not return ProtocolFlags in every case.
@@ -78,7 +81,7 @@
 
 #ifndef lint
 static const char SysKonnectFileId[] = "@(#)"
-	"$Id: skcsum.c,v 1.10 2002/04/11 10:02:04 rwahl Exp $"
+	"$Id: skcsum.c,v 1.2 2010/11/15 10:42:22 jimmy_huang Exp $"
 	" (C) SysKonnect.";
 #endif	/* !lint */
 

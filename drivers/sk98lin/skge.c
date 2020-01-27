@@ -2,8 +2,8 @@
  *
  * Name:    skge.c
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.46 $
- * Date:       	$Date: 2003/02/25 14:16:36 $
+ * Version:	$Revision: 1.2 $
+ * Date:       	$Date: 2010/11/15 10:42:22 $
  * Purpose:	The main driver source module
  *
  ******************************************************************************/
@@ -56,6 +56,9 @@
  * History:
  *
  *	$Log: skge.c,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.46  2003/02/25 14:16:36  mlindner
  *	Fix: Copyright statement
  *

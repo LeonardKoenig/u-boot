@@ -2,8 +2,8 @@
  *
  * Name:	sktimer.c
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.12 $
- * Date:	$Date: 1999/11/22 13:38:51 $
+ * Version:	$Revision: 1.2 $
+ * Date:	$Date: 2010/11/15 10:42:22 $
  * Purpose:	High level timer functions.
  *
  ******************************************************************************/
@@ -27,6 +27,9 @@
  * History:
  *
  *	$Log: sktimer.c,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.12  1999/11/22 13:38:51  cgoos
  *	Changed license header to GPL.
  *
@@ -80,7 +83,7 @@
 	Event queue and dispatcher
 */
 static const char SysKonnectFileId[] =
-	"$Header: /usr56/projects/ge/schedule/sktimer.c,v 1.12 1999/11/22 13:38:51 cgoos Exp $" ;
+	"$Header: /cvsroot/Ath_platform/2.6.31/u-boot/drivers/sk98lin/sktimer.c,v 1.2 2010/11/15 10:42:22 jimmy_huang Exp $" ;
 
 #include "h/skdrv1st.h"		/* Driver Specific Definitions */
 #include "h/skdrv2nd.h"		/* Adapter Control- and Driver specific Def. */

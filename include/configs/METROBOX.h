@@ -25,10 +25,13 @@
  ***********************************************************************/
 
 /*
- * $Id: METROBOX.h,v 1.21 2005/06/03 15:05:25 tsawyer Exp $
+ * $Id: METROBOX.h,v 1.2 2010/11/15 10:42:22 jimmy_huang Exp $
  *
  *
  * $Log: METROBOX.h,v $
+ * Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ * 	Patch u-boot from SDK wasp-9.2.999.28
+ *
  * Revision 1.21  2005/06/03 15:05:25  tsawyer
  * MB rev 2.0.3 KA rev 0.0.7.  Add CONFIG_VERSION_VARIABLE, Add fakeled to MB
  *

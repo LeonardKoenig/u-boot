@@ -2,8 +2,8 @@
  *
  * Name:	xmac_ii.h
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.46 $
- * Date:	$Date: 2003/01/28 09:47:45 $
+ * Version:	$Revision: 1.2 $
+ * Date:	$Date: 2010/11/15 10:42:22 $
  * Purpose:	Defines and Macros for Gigabit Ethernet Controller
  *
  ******************************************************************************/
@@ -26,6 +26,9 @@
  * History:
  *
  *	$Log: xmac_ii.h,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.46  2003/01/28 09:47:45  rschmidt
  *	Added defines for copper MDI/MDIX configuration
  *	Added defines for LED Control Register

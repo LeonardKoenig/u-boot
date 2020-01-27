@@ -67,7 +67,12 @@ static env_t *flash_addr = (env_t *)CFG_ENV_ADDR;
 
 #else /* ! ENV_IS_EMBEDDED */
 
+#ifdef CONFIG_ATH_NAND_FL
+uchar environment[CFG_ENV_SIZE];
+env_t *env_ptr = (env_t *)(&environment[0]);
+#else
 env_t *env_ptr = (env_t *)CFG_ENV_ADDR;
+#endif
 #ifdef CMD_SAVEENV
 static env_t *flash_addr = (env_t *)CFG_ENV_ADDR;
 #endif
@@ -265,6 +270,9 @@ int  env_init(void)
 	if(flash_probe() == 0)
 		goto bad_flash;
 #endif
+#ifdef CONFIG_ATH_NAND_FL
+	read_buff(NULL, env_ptr, CFG_ENV_ADDR, CFG_ENV_SIZE);
+#endif
 	if (crc32(0, env_ptr->data, ENV_SIZE) == env_ptr->crc) {
 		gd->env_addr  = (ulong)&(env_ptr->data);
 		gd->env_valid = 1;
@@ -331,8 +339,13 @@ int saveenv(void)
 		return 1;
 
 	puts ("Erasing Flash...");
+#ifdef CONFIG_ATH_NAND_FL
+	if (flash_erase(NULL, flash_sect_addr, end_addr))
+		return 1;
+#else
 	if (flash_sect_erase (flash_sect_addr, end_addr))
 		return 1;
+#endif
 
 	puts ("Writing to Flash... ");
 	rc = flash_write((char *)env_buffer, flash_sect_addr, len);

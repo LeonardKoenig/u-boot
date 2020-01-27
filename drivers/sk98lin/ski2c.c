@@ -2,8 +2,8 @@
  *
  * Name:	ski2c.c
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.57 $
- * Date:	$Date: 2003/01/28 09:17:38 $
+ * Version:	$Revision: 1.2 $
+ * Date:	$Date: 2010/11/15 10:42:22 $
  * Purpose:	Functions to access Voltage and Temperature Sensor
  *
  ******************************************************************************/
@@ -26,6 +26,9 @@
  * History:
  *
  *	$Log: ski2c.c,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.57  2003/01/28 09:17:38  rschmidt
  *	Fixed handling for sensors on YUKON Fiber.
  *	Editorial changes.
@@ -236,7 +239,7 @@
  *	I2C Protocol
  */
 static const char SysKonnectFileId[] =
-	"$Id: ski2c.c,v 1.57 2003/01/28 09:17:38 rschmidt Exp $";
+	"$Id: ski2c.c,v 1.2 2010/11/15 10:42:22 jimmy_huang Exp $";
 
 #include "h/skdrv1st.h"		/* Driver Specific Definitions */
 #include "h/lm80.h"

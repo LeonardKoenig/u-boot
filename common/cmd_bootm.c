@@ -31,12 +31,13 @@
 #include <malloc.h>
 #include <zlib.h>
 #include <bzlib.h>
+#include <LzmaWrapper.h>
 #include <environment.h>
 #include <asm/byteorder.h>
-
 #ifdef CONFIG_OF_FLAT_TREE
 #include <ft_build.h>
 #endif
+#include "../httpd/bsp.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -146,10 +147,105 @@ extern void lynxkdi_boot( image_header_t * );
 #define CFG_BOOTM_LEN	0x800000	/* use 8MByte as default max gunzip size */
 #endif
 
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+void backup_mode_handle();
+
+void backup_mode_handle()
+{
+	eth_init ( gd->bd );
+	httpd ( 0, NULL );
+}
+#endif
+
 image_header_t header;
 
 ulong load_addr = CFG_LOAD_ADDR;		/* Default Load Address */
 
+#define CONFIG_LZMA 1
+#ifdef CONFIG_DUAL_IMAGES
+
+static int __image_info (ulong addr)
+{
+	ulong	data, len, checksum;
+	image_header_t *hdr = &header;
+
+	printf ("\n## Checking Image at %08lx ...\n", addr);
+
+	/* Copy header so we can blank CRC field for re-calculation */
+	memmove (&header, (char *)addr, sizeof(image_header_t));
+
+	if (ntohl(hdr->ih_magic) != IH_MAGIC) {
+		puts ("   Bad Magic Number\n");
+		return 1;
+	}
+
+	data = (ulong)&header;
+	len  = sizeof(image_header_t);
+
+	checksum = ntohl(hdr->ih_hcrc);
+	hdr->ih_hcrc = 0;
+
+	if (crc32 (0, (uchar *)data, len) != checksum) {
+		puts ("   Bad Header Checksum\n");
+		return 1;
+	}
+
+	/* for multi-file images we need the data part, too */
+	print_image_hdr ((image_header_t *)addr);
+
+	data = addr + sizeof(image_header_t);
+	len  = ntohl(hdr->ih_size);
+
+	puts ("   Verifying Checksum ... ");
+	if (crc32 (0, (uchar *)data, len) != ntohl(hdr->ih_dcrc)) {
+		puts ("   Bad Data CRC\n");
+		return 1;
+	}
+	puts ("OK\n");
+	return 0;
+}
+static void image_recover(ulong dst, ulong src, int len)
+{
+	/* copy @src to DDR2 */
+	memcpy(0x80060000, src, len);
+
+	flash_sect_erase(dst, dst + len - 1);
+	printf("recover to %08X\n", dst);
+	flash_write (0x80060000, dst, len);
+}
+static int dual_image_sanity_recover(ulong addr)
+{
+	int primary_crc, slave_crc;
+	int img;
+	ulong img_base = 0x9f020000; /* flash image start addr */ 
+	/* see lib_mips/mips_linux.c */
+	img = ((FLASH_SIZE * 1024) - 64 - 64 - 256 - 64 - 64 ) >> 1;
+	primary_crc = __image_info(img_base);
+	slave_crc = __image_info(img_base + (img << 10));
+
+	printf("@%08X: primay image at %08X status: %s, "
+		"slave image at %08X status: %s\n", addr,
+		img_base, primary_crc == 0?"crc ok":"crc fail",
+		img_base + (img << 10), slave_crc == 0?"crc ok":"crc fail");
+
+	if (primary_crc != 0 && slave_crc != 0) {
+		printf("Daul Image fault, go do backup_mode\n");
+		return 1;
+	} else if (primary_crc != 0) {
+		printf("recover slave to primary\n");
+		image_recover(img_base, img_base + (img << 10), img << 10);
+	} else if (slave_crc != 0) {
+		printf("recover primary to slave\n");
+		image_recover(img_base + (img << 10), img_base, img << 10);
+	}
+	return 0;
+}
+#endif	//CONFIG_DUAL_IMAGES
 int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	ulong	iflag;
@@ -172,6 +268,13 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	}
 
 	SHOW_BOOT_PROGRESS (1);
+
+#ifdef CONFIG_DUAL_IMAGES
+	if (dual_image_sanity_recover(addr) != 0) {
+		backup_mode_handle();
+		return 1;
+	}
+#endif
 	printf ("## Booting image at %08lx ...\n", addr);
 
 	/* Copy header so we can blank CRC field for re-calculation */
@@ -180,7 +283,15 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		read_dataflash(addr, sizeof(image_header_t), (char *)&header);
 	} else
 #endif
-	memmove (&header, (char *)addr, sizeof(image_header_t));
+	{
+#ifdef CONFIG_ATH_NAND_FL
+		read_buff(NULL, (char *)&header, addr, sizeof(image_header_t));
+#elif defined(ATH_DUAL_FLASH)
+		ath_nand_read_buff(NULL, (char *)&header, addr, sizeof(image_header_t));
+#else
+		memmove (&header, (char *)addr, sizeof(image_header_t));
+#endif
+	}
 
 	if (ntohl(hdr->ih_magic) != IH_MAGIC) {
 #ifdef __I386__	/* correct image format not implemented yet - fake it */
@@ -196,6 +307,16 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	    {
 		puts ("Bad Magic Number\n");
 		SHOW_BOOT_PROGRESS (-1);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+			backup_mode_handle();
+#endif
+
 		return 1;
 	    }
 	}
@@ -210,6 +331,16 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	if (crc32 (0, (uchar *)data, len) != checksum) {
 		puts ("Bad Header Checksum\n");
 		SHOW_BOOT_PROGRESS (-2);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+		backup_mode_handle();
+#endif
+
 		return 1;
 	}
 	SHOW_BOOT_PROGRESS (3);
@@ -223,6 +354,15 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 #endif
 
 
+#ifdef CONFIG_ATH_NAND_FL
+	read_buff(NULL, (char *)CFG_LOAD_ADDR, addr,
+			ntohl(hdr->ih_size) + sizeof(image_header_t));
+	addr = CFG_LOAD_ADDR;
+#elif defined(ATH_DUAL_FLASH)
+	ath_nand_read_buff(NULL, (char *)CFG_LOAD_ADDR, addr,
+			ntohl(hdr->ih_size) + sizeof(image_header_t));
+	addr = CFG_LOAD_ADDR;
+#endif
 	/* for multi-file images we need the data part, too */
 	print_image_hdr ((image_header_t *)addr);
 
@@ -230,10 +370,20 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	len  = ntohl(hdr->ih_size);
 
 	if (verify) {
-		puts ("   Verifying Checksum ... ");
+		printf("   Verifying Checksum at 0x%p ...", data);
 		if (crc32 (0, (uchar *)data, len) != ntohl(hdr->ih_dcrc)) {
 			printf ("Bad Data CRC\n");
 			SHOW_BOOT_PROGRESS (-3);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+			backup_mode_handle();
+#endif
+
 			return 1;
 		}
 		puts ("OK\n");
@@ -266,6 +416,16 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	{
 		printf ("Unsupported Architecture 0x%x\n", hdr->ih_arch);
 		SHOW_BOOT_PROGRESS (-4);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+		backup_mode_handle();
+#endif
+
 		return 1;
 	}
 	SHOW_BOOT_PROGRESS (5);
@@ -291,6 +451,16 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		break;
 	default: printf ("Wrong Image Type for %s command\n", cmdtp->name);
 		SHOW_BOOT_PROGRESS (-5);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+			backup_mode_handle();
+#endif
+
 		return 1;
 	}
 	SHOW_BOOT_PROGRESS (6);
@@ -312,6 +482,17 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	invalidate_l1_instruction_cache();
 	flush_data_cache();
 	dcache_disable();
+#endif
+
+#if defined(CONFIG_AR7100) || defined(CONFIG_AR7240)
+	/*
+	 * Flush everything, restore caches for linux
+	 */
+	mips_cache_flush();
+	mips_icache_flush_ix();
+
+	/* XXX - this causes problems when booting from flash */
+	/* dcache_disable(); */
 #endif
 
 	switch (hdr->ih_comp) {
@@ -339,6 +520,7 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 #endif	/* CONFIG_HW_WATCHDOG || CONFIG_WATCHDOG */
 		}
 		break;
+#ifndef COMPRESSED_UBOOT
 	case IH_COMP_GZIP:
 		printf ("   Uncompressing %s ... ", name);
 		if (gunzip ((void *)ntohl(hdr->ih_load), unc_len,
@@ -363,15 +545,48 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 			printf ("BUNZIP2 ERROR %d - must RESET board to recover\n", i);
 			SHOW_BOOT_PROGRESS (-6);
 			udelay(100000);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+				backup_mode_handle();
+#endif
+
 			do_reset (cmdtp, flag, argc, argv);
 		}
 		break;
 #endif /* CONFIG_BZIP2 */
+#endif /* #ifndef COMPRESSED_UBOOT */
+#ifdef CONFIG_LZMA
+	case IH_COMP_LZMA:
+		printf ("   Uncompressing %s ... ", name);
+		i = lzma_inflate ((unsigned char *)data, len, (unsigned char*)ntohl(hdr->ih_load), &unc_len);
+		if (i != LZMA_RESULT_OK) {
+			printf ("LZMA ERROR %d - must RESET board to recover\n", i);
+			SHOW_BOOT_PROGRESS (-6);
+			udelay(100000);
+			do_reset (cmdtp, flag, argc, argv);
+		}
+		break;
+#endif /* CONFIG_LZMA */
 	default:
 		if (iflag)
 			enable_interrupts();
 		printf ("Unimplemented compression type %d\n", hdr->ih_comp);
 		SHOW_BOOT_PROGRESS (-7);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+			backup_mode_handle();
+#endif
+
 		return 1;
 	}
 	puts ("OK\n");
@@ -403,6 +618,16 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 			enable_interrupts();
 		printf ("Can't boot image type %d\n", hdr->ih_type);
 		SHOW_BOOT_PROGRESS (-8);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+			backup_mode_handle();
+#endif
+
 		return 1;
 	}
 	SHOW_BOOT_PROGRESS (8);
@@ -452,6 +677,16 @@ int do_bootm (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	}
 
 	SHOW_BOOT_PROGRESS (-9);
+
+/*  Date    :
+*   Name    : Jimmy Huang
+*   Reason  : Add for backup mode httpd support
+*   Note    : Copy from AR7161
+*/
+#if defined(HTTPD_SUPPORT)
+	backup_mode_handle();
+#endif
+
 #ifdef DEBUG
 	puts ("\n## Control returned to monitor - resetting...\n");
 	do_reset (cmdtp, flag, argc, argv);
@@ -1267,6 +1502,7 @@ print_type (image_header_t *hdr)
 	case IH_COMP_NONE:	comp = "uncompressed";		break;
 	case IH_COMP_GZIP:	comp = "gzip compressed";	break;
 	case IH_COMP_BZIP2:	comp = "bzip2 compressed";	break;
+	case IH_COMP_LZMA:	comp = "lzma compressed";	break;
 	default:		comp = "unknown compression";	break;
 	}
 
@@ -1299,7 +1535,7 @@ static void zfree(void *x, void *addr, unsigned nb)
 #define RESERVED	0xe0
 
 #define DEFLATED	8
-
+#ifndef COMPRESSED_UBOOT
 int gunzip(void *dst, int dstlen, unsigned char *src, unsigned long *lenp)
 {
 	z_stream s;
@@ -1361,7 +1597,7 @@ void bz_internal_error(int errcode)
 	printf ("BZIP2 internal error %d\n", errcode);
 }
 #endif /* CONFIG_BZIP2 */
-
+#endif /* #ifndef COMPRESSED_UBOOT */
 static void
 do_bootm_rtems (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[],
 		ulong addr, ulong *len_ptr, int verify)

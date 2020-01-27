@@ -231,6 +231,12 @@ int eth_initialize(bd_t *bis)
 #if defined(CONFIG_RTL8169)
 	rtl8169_initialize(bis);
 #endif
+#if defined(CONFIG_AR7100)
+    ag7100_enet_initialize(bis);
+#endif
+#if defined(CONFIG_AR7240)
+    ag7240_enet_initialize(bis);
+#endif
 
 	if (!eth_devices) {
 		puts ("No ethernet found.\n");
@@ -258,6 +264,7 @@ int eth_initialize(bd_t *bis)
 					tmp = (*end) ? end+1 : end;
 			}
 
+#if !defined(CONFIG_AR9100) && !defined(CONFIG_AR7240)
 			if (memcmp(env_enetaddr, "\0\0\0\0\0\0", 6)) {
 				if (memcmp(dev->enetaddr, "\0\0\0\0\0\0", 6) &&
 				    memcmp(dev->enetaddr, env_enetaddr, 6))
@@ -278,6 +285,7 @@ int eth_initialize(bd_t *bis)
 
 				memcpy(dev->enetaddr, env_enetaddr, 6);
 			}
+#endif
 
 			eth_number++;
 			dev = dev->next;
@@ -343,8 +351,9 @@ int eth_init(bd_t *bis)
 
 	old_current = eth_current;
 	do {
+#if !defined(CFG_ATHRS26_PHY) && !defined(CFG_ATHRHDR_EN)
 		debug ("Trying %s\n", eth_current->name);
-
+#endif
 		if (eth_current->init(eth_current, bis)) {
 			eth_current->state = ETH_STATE_ACTIVE;
 

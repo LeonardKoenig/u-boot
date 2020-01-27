@@ -2,13 +2,16 @@
  *
  * Unless otherwise specified, Copyright (C) 2004-2005 Barco Control Rooms
  *
- * $Source: /home/services/cvs/firmware/ppc/u-boot-1.1.2/board/barco/flash.c,v $
- * $Revision: 1.3 $
- * $Author: mleeman $
- * $Date: 2005/02/21 12:48:58 $
+ * $Source: /cvsroot/Ath_platform/2.6.31/u-boot/board/barco/flash.c,v $
+ * $Revision: 1.2 $
+ * $Author: jimmy_huang $
+ * $Date: 2010/11/15 10:42:22 $
  *
  * Last ChangeLog Entry
  * $Log: flash.c,v $
+ * Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ * 	Patch u-boot from SDK wasp-9.2.999.28
+ *
  * Revision 1.3  2005/02/21 12:48:58  mleeman
  * update of copyright years (feedback wd)
  *

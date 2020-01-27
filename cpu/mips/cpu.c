@@ -26,6 +26,17 @@
 #include <asm/inca-ip.h>
 #include <asm/mipsregs.h>
 
+#if defined(CONFIG_AR7100)
+#include <asm/addrspace.h>
+#include <ar7100_soc.h>
+#endif
+
+#if defined(CONFIG_AR7240)
+#include <asm/addrspace.h>
+#include <ar7240_soc.h>
+#endif
+
+
 int do_reset(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 #if defined(CONFIG_INCA_IP)
@@ -34,14 +45,65 @@ int do_reset(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	void (*f)(void) = (void *) 0xbfc00000;
 
 	f();
+#elif defined(CONFIG_AR7100)
+#ifndef COMPRESSED_UBOOT
+	fprintf(stdout, "\nResetting...\n");
+#endif  /* #ifndef COMPRESSED_UBOOT */
+	for (;;) {
+		ar7100_reg_wr(AR7100_RESET,
+			(AR7100_RESET_FULL_CHIP | AR7100_RESET_DDR));
+	}
+#elif defined(CONFIG_AR7240)
+#ifndef COMPRESSED_UBOOT
+	fprintf(stdout, "\nResetting...\n");
+#endif  /* #ifndef COMPRESSED_UBOOT */
+	for (;;) {
+#ifdef CONFIG_WASP
+/*
+*  Date: 2011-030-21 
+*  Name: Charles Teng
+*  Reason: patch from LSDK-9.2.0.303
+*	   WASP 1.1 support
+*/
+		if (ar7240_reg_rd(AR7240_REV_ID) & 0xf) {
+			ar7240_reg_wr(AR7240_RESET,
+				(AR7240_RESET_FULL_CHIP | AR7240_RESET_DDR));
+		} else {
+		/*
+		 * WAR for full chip reset spi vs. boot-rom selection
+		 * bug in wasp 1.0
+		 */
+/*
+*  Date: 2011-030-21 
+*  Name: Charles Teng
+*  Reason: patch from LSDK-9.2.0.303
+*	   WASP 1.1 support
+*/
+			ar7240_reg_wr (AR7240_GPIO_OE,
+				ar7240_reg_rd(AR7240_GPIO_OE) & (~(1 << 17)));
+		}
+#else
+		ar7240_reg_wr(AR7240_RESET,
+			(AR7240_RESET_FULL_CHIP | AR7240_RESET_DDR));
 #endif
+	}
+#endif
+#ifndef COMPRESSED_UBOOT
 	fprintf(stderr, "*** reset failed ***\n");
+#endif  /* #ifndef COMPRESSED_UBOOT */
 	return 0;
 }
 
 void flush_cache (ulong start_addr, ulong size)
 {
+	u32 end, a;
+    int i;
 
+    a = start_addr & ~(CFG_CACHELINE_SIZE - 1);
+    size = (size + CFG_CACHELINE_SIZE - 1) & ~(CFG_CACHELINE_SIZE - 1);
+    end = a + size;
+
+    dcache_flush_range(a, end);
 }
 
 void write_one_tlb( int index, u32 pagemask, u32 hi, u32 low0, u32 low1 ){

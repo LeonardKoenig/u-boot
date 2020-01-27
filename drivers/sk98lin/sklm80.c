@@ -2,8 +2,8 @@
  *
  * Name:	sklm80.c
  * Project:	GEnesis, PCI Gigabit Ethernet Adapter
- * Version:	$Revision: 1.20 $
- * Date:	$Date: 2002/08/13 09:16:27 $
+ * Version:	$Revision: 1.2 $
+ * Date:	$Date: 2010/11/15 10:42:22 $
  * Purpose:	Funktions to access Voltage and Temperature Sensor (LM80)
  *
  ******************************************************************************/
@@ -26,6 +26,9 @@
  * History:
  *
  *	$Log: sklm80.c,v $
+ *	Revision 1.2  2010/11/15 10:42:22  jimmy_huang
+ *		Patch u-boot from SDK wasp-9.2.999.28
+ *	
  *	Revision 1.20  2002/08/13 09:16:27  rschmidt
  *	Changed return value for SkLm80ReadSensor() back to 'int'
  *	Editorial changes
@@ -106,7 +109,7 @@
 	LM80 functions
 */
 static const char SysKonnectFileId[] =
-	"$Id: sklm80.c,v 1.20 2002/08/13 09:16:27 rschmidt Exp $" ;
+	"$Id: sklm80.c,v 1.2 2010/11/15 10:42:22 jimmy_huang Exp $" ;
 
 #include "h/skdrv1st.h"		/* Driver Specific Definitions */
 #include "h/lm80.h"

@@ -31,7 +31,7 @@
  * provisions above, a recipient may use your version of this file
  * under either the RHEPL or the GPL.
  *
- * $Id: compr_zlib.c,v 1.2 2002/01/24 22:58:42 rfeany Exp $
+ * $Id: compr_zlib.c,v 1.1.1.1 2010/11/01 10:41:06 nick_chou Exp $
  *
  */
 
